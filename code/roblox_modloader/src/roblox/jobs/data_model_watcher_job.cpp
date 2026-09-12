@@ -115,7 +115,9 @@ namespace rml::jobs
 		{
 			try
 			{
-				dotnet::g_dotnet_mod_loader->notify_data_model_changed(reinterpret_cast<u64>(old_data_model), reinterpret_cast<u64>(new_data_model), static_cast<int>(data_model_type));
+				dotnet::g_dotnet_mod_loader->notify_data_model_changed(
+				    reinterpret_cast<u64>(static_cast<const RBX::Instance*>(old_data_model)),
+				    reinterpret_cast<u64>(static_cast<RBX::Instance*>(new_data_model)), static_cast<int>(data_model_type));
 			}
 			catch (const std::exception& e)
 			{

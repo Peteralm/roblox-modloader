@@ -16,7 +16,7 @@ namespace RBX
 	{
 	};
 
-	class ServiceProvider : public Instance, public ServiceProviderProp
+	class RML_ENGINE_CLASS ServiceProvider : public Instance, public ServiceProviderProp
 	{
 	public:
 		virtual bool can_find_service() const = 0;

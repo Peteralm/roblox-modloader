@@ -54,7 +54,10 @@ namespace rml::memory
 
 		static inline constexpr uint32_t fnv1a_32(const char* str, uint32_t hash = FNV_OFFSET_32) noexcept
 		{
-			return (str[0] == '\0') ? hash : fnv1a_32(&str[1], (hash ^ static_cast<uint32_t>(str[0])) * FNV_PRIME_32);
+			for (; *str != '\0'; ++str)
+				hash = (hash ^ static_cast<uint32_t>(*str)) * FNV_PRIME_32;
+
+			return hash;
 		}
 
 		template<signature sig>

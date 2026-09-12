@@ -14,8 +14,8 @@ namespace RBX::Reflection
 	template<typename T>
 	struct Vector
 	{
-		using value_type     = T;
-		using iterator       = T*;
+		using value_type = T;
+		using iterator = T*;
 		using const_iterator = T*;
 
 		T* m_data;
@@ -78,7 +78,7 @@ namespace RBX::Reflection
 		struct CollectionEntry
 		{
 			MemberDescriptorType* descriptor;
-			uint64_t              unk;
+			uint64_t unk;
 		};
 		using Collection = Vector<CollectionEntry>;
 
@@ -86,19 +86,41 @@ namespace RBX::Reflection
 		{
 			const CollectionEntry* ptr;
 
-			MemberDescriptorType* operator*() const noexcept { return ptr->descriptor; }
-			ConstIterator& operator++() noexcept { ++ptr; return *this; }
-			bool operator!=(const ConstIterator& o) const noexcept { return ptr != o.ptr; }
+			MemberDescriptorType* operator*() const noexcept
+			{
+				return ptr->descriptor;
+			}
+			ConstIterator& operator++() noexcept
+			{
+				++ptr;
+				return *this;
+			}
+			bool operator!=(const ConstIterator& o) const noexcept
+			{
+				return ptr != o.ptr;
+			}
 		};
 		using Iterator = ConstIterator;
 
 		struct DescriptorView
 		{
 			ConstIterator m_begin, m_end;
-			ConstIterator begin() const noexcept { return m_begin; }
-			ConstIterator end() const noexcept { return m_end; }
-			[[nodiscard]] std::size_t size() const noexcept { return static_cast<std::size_t>(m_end.ptr - m_begin.ptr); }
-			[[nodiscard]] bool empty() const noexcept { return m_begin.ptr == m_end.ptr; }
+			ConstIterator begin() const noexcept
+			{
+				return m_begin;
+			}
+			ConstIterator end() const noexcept
+			{
+				return m_end;
+			}
+			[[nodiscard]] std::size_t size() const noexcept
+			{
+				return static_cast<std::size_t>(m_end.ptr - m_begin.ptr);
+			}
+			[[nodiscard]] bool empty() const noexcept
+			{
+				return m_begin.ptr == m_end.ptr;
+			}
 		};
 
 	private:
@@ -180,8 +202,8 @@ namespace RBX::Reflection
 
 	private:
 		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_SIZE(MemberDescriptor, 0x40);
-			RML_ASSERT_LAYOUT_OFFSET(MemberDescriptor, security, 0x38);
+		RML_ASSERT_LAYOUT_SIZE(MemberDescriptor, 0x40);
+		RML_ASSERT_LAYOUT_OFFSET(MemberDescriptor, security, 0x38);
 		RML_LAYOUT_GUARD_END()
 	};
 }

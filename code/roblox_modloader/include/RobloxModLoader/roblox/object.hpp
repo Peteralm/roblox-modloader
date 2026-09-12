@@ -4,6 +4,7 @@
 #include "security/script_permissions.hpp"
 #include "slots_holder.hpp"
 
+#include "RobloxModLoader/internal/engine_abi.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 
 #include <cstdint>
@@ -46,7 +47,7 @@ namespace RBX
 		std::uint64_t index;
 	};
 
-	class Object : public Reflection::DescribedBase, public ObjectProp
+	class RML_ENGINE_CLASS Object : public Reflection::DescribedBase, public ObjectProp
 	{
 	public:
 		virtual void write_all_properties_for_change_tracking(

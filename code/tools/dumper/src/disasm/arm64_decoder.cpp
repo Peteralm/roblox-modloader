@@ -304,6 +304,7 @@ namespace rml::dumper::disasm
 						access.displacement = operand.mem.disp + fold.offset + v * width;
 						access.is_write = is_store(instruction->id);
 						access.value_register = to_register(value);
+						access.value_object = entry_object(access.value_register);
 
 						trace.accesses.push_back(access);
 					}

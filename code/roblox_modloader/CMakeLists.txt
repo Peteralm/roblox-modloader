@@ -183,14 +183,16 @@ if (ROBLOX_MODLOADER_INSTALL)
 endif ()
 
 if (WIN32 AND TARGET roblox_modloader AND DEFINED ENV{ROBLOX_STUDIO_PATH} AND NOT "$ENV{ROBLOX_STUDIO_PATH}" STREQUAL "")
-    add_custom_command(TARGET roblox_modloader POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{ROBLOX_STUDIO_PATH}/RobloxModLoader/libraries"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${RML_LUA_LIBS_DIR}"
-            "$ENV{ROBLOX_STUDIO_PATH}/RobloxModLoader/libraries"
-            COMMENT "Copying runtime Luau libraries to RobloxModLoader/libraries"
-            VERBATIM
-    )
+    if (EXISTS "${RML_LUA_LIBS_DIR}")
+        add_custom_command(TARGET roblox_modloader POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{ROBLOX_STUDIO_PATH}/RobloxModLoader/libraries"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${RML_LUA_LIBS_DIR}"
+                "$ENV{ROBLOX_STUDIO_PATH}/RobloxModLoader/libraries"
+                COMMENT "Copying runtime Luau libraries to RobloxModLoader/libraries"
+                VERBATIM
+        )
+    endif ()
 
     if (RML_DOTNET_RUNTIME_ROOT AND EXISTS "${RML_DOTNET_RUNTIME_ROOT}")
         add_custom_command(TARGET roblox_modloader POST_BUILD

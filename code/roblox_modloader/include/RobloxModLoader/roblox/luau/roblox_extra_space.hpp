@@ -24,7 +24,7 @@ namespace RBX::Luau {
         ExtendedIdentity identity;
 
     private:
-        std::byte padding_0[0x8];
+        std::byte padding_0[0x10];
 
     public:
         lua_State *bound_state;
@@ -39,9 +39,9 @@ namespace RBX::Luau {
     private:
         RML_LAYOUT_GUARD_BEGIN()
             RML_ASSERT_LAYOUT_OFFSET(ThreadIdentityContext, identity, 0x00);
-            RML_ASSERT_LAYOUT_OFFSET(ThreadIdentityContext, bound_state, 0x18);
-            RML_ASSERT_LAYOUT_OFFSET(ThreadIdentityContext, capabilities, 0x28);
-            RML_ASSERT_LAYOUT_OFFSET(ThreadIdentityContext, capability_deriver, 0x30);
+            RML_ASSERT_LAYOUT_OFFSET(ThreadIdentityContext, bound_state, 0x20);
+            RML_ASSERT_LAYOUT_OFFSET(ThreadIdentityContext, capabilities, 0x30);
+            RML_ASSERT_LAYOUT_OFFSET(ThreadIdentityContext, capability_deriver, 0x38);
         RML_LAYOUT_GUARD_END()
     };
 
@@ -76,30 +76,39 @@ namespace RBX::Luau {
 
     public:
         CapabilityValidator *capabilities_validator;
-        WeakRef actor;
-        uint64_t capabilities;
-
-    private:
-        std::byte padding_2[0x20];
-
-    public:
         ExtendedIdentity context;
 
     private:
-        std::byte padding_3[0x8];
+        std::byte padding_2[0x10];
 
     public:
+        WeakRef actor;
         WeakRef capability_defining_instance;
+
+    private:
+        std::byte padding_3[0x10];
+
+    public:
         WeakRef script;
+
+    private:
+        std::byte padding_4[0x10];
+
+    public:
+        uint64_t capabilities;
+
+    private:
+        std::byte padding_5[0x10];
     };
 
     RML_LAYOUT_DIAGNOSTIC_PUSH()
     RML_ASSERT_OFFSET(RobloxExtraSpace, shared, 0x18);
     RML_ASSERT_OFFSET(RobloxExtraSpace, capabilities_validator, 0x28);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, actor, 0x30);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, capabilities, 0x40);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, context, 0x68);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, capability_defining_instance, 0x80);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, script, 0x90);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, context, 0x30);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, actor, 0x50);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, capability_defining_instance, 0x60);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, script, 0x80);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, capabilities, 0xA0);
+    RML_ASSERT_SIZE(RobloxExtraSpace, 0xB8);
     RML_LAYOUT_DIAGNOSTIC_POP()
 }

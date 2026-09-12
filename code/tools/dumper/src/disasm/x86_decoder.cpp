@@ -250,6 +250,7 @@ namespace rml::dumper::disasm
 				access.is_write = (operand.actions & ZYDIS_OPERAND_ACTION_MASK_WRITE) != 0;
 				const auto raw_value = companion_register(instruction, operands, i);
 				access.value_register = origins.of(raw_value);
+				access.value_object = origins.object_of(raw_value);
 				access.immediate = first_immediate(instruction, operands);
 
 				if (access.is_write && !access.immediate && origins.object_of(raw_value) == zero_object)
@@ -257,13 +258,6 @@ namespace rml::dumper::disasm
 
 				trace.accesses.push_back(access);
 			}
-
-			if ((instruction.mnemonic == ZYDIS_MNEMONIC_XOR || instruction.mnemonic == ZYDIS_MNEMONIC_SUB) &&
-			    instruction.operand_count_visible == 2 &&
-			    operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-			    operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-			    operands[0].reg.value == operands[1].reg.value)
-				origins.set_zero(to_register(operands[0].reg.value));
 
 			record_constant(trace, instruction, operands, address, sequence);
 
@@ -279,6 +273,13 @@ namespace rml::dumper::disasm
 					    (operands[i].actions & ZYDIS_OPERAND_ACTION_MASK_WRITE) != 0)
 						origins.redefine(to_register(operands[i].reg.value));
 			}
+
+			if ((instruction.mnemonic == ZYDIS_MNEMONIC_XOR || instruction.mnemonic == ZYDIS_MNEMONIC_SUB) &&
+			    instruction.operand_count_visible == 2 &&
+			    operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			    operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			    operands[0].reg.value == operands[1].reg.value)
+				origins.set_zero(to_register(operands[0].reg.value));
 
 			offset += instruction.length;
 			trace.end = static_cast<Rva>(begin + offset);

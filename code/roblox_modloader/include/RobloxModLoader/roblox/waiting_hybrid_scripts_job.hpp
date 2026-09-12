@@ -6,18 +6,18 @@
 
 namespace RBX::ScriptContextFacets {
     class WaitingHybridScriptsJob : public DataModelJob {
-        char padding[0x168];
+        char padding[0x170];
 
     public:
         ScriptContext *script_context;
 
     private:
-        char padding_tail[0x48];
+        char padding_tail[0x40];
 
         RML_LAYOUT_GUARD_BEGIN()
             RML_ASSERT_LAYOUT_SIZE(WaitingHybridScriptsJob, 0x200);
             RML_ASSERT_LAYOUT_OFFSET(WaitingHybridScriptsJob, padding, 0x48);
-            RML_ASSERT_LAYOUT_OFFSET(WaitingHybridScriptsJob, script_context, 0x1B0);
+            RML_ASSERT_LAYOUT_OFFSET(WaitingHybridScriptsJob, script_context, 0x1B8);
         RML_LAYOUT_GUARD_END()
     };
 }

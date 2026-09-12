@@ -62,7 +62,7 @@ namespace RBX
 		}
 	};
 
-	class DataModel : public IDataState,
+	class RML_ENGINE_CLASS DataModel : public IDataState,
 	                  public Diagnostics::Countable<DataModel>,
 	                  public TaskSchedulerArbiter,
 	                  public Described<DataModel, ServiceProvider>,
@@ -113,7 +113,7 @@ namespace RBX
 		bool can_create_service() const override = 0;
 
 	private:
-		std::byte reserved_338[0x38];
+		std::byte reserved_338[0x48];
 
 	public:
 		std::unique_ptr<SerializedExternalRefs> serialized_external_refs;
@@ -148,17 +148,22 @@ namespace RBX
 	};
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
-	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x370);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x408);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x410);
 #if defined(RML_WINDOWS)
-	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4A8);
-	RML_ASSERT_OFFSET(DataModel, type, 0x518);
-	RML_ASSERT_OFFSET(DataModel, verb_container, 0x520);
+	RML_ASSERT_OFFSET(DataModel, workspace, 0x348);
+	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3B0);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x448);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x450);
+	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4F0);
+	RML_ASSERT_OFFSET(DataModel, type, 0x548);
+	RML_ASSERT_OFFSET(DataModel, verb_container, 0x550);
 #else
-	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x498);
-	RML_ASSERT_OFFSET(DataModel, type, 0x4F0);
-	RML_ASSERT_OFFSET(DataModel, verb_container, 0x4F8);
+	RML_ASSERT_OFFSET(DataModel, workspace, 0x338);
+	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3A0);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x438);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x440);
+	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4C8);
+	RML_ASSERT_OFFSET(DataModel, type, 0x520);
+	RML_ASSERT_OFFSET(DataModel, verb_container, 0x528);
 #endif
 	RML_LAYOUT_DIAGNOSTIC_POP()
 }

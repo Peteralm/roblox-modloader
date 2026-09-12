@@ -28,6 +28,7 @@ namespace rml::dumper::disasm
 		Register base{Register::none};
 		Register index{Register::none};
 		Register value_register{Register::none};
+		Object value_object{no_object};
 		std::uint8_t scale{1};
 		std::uint8_t width{};
 		std::int64_t displacement{};

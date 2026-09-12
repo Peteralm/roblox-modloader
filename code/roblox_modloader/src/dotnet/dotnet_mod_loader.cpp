@@ -50,7 +50,7 @@ namespace rml::dotnet
 				const auto current = rml::task_scheduler().get_data_model_by_type(static_cast<RBX::DataModelType>(i));
 				if (current)
 				{
-					if (auto r2 = m_bridge.notify_data_model_changed(0, reinterpret_cast<uint64_t>(current), i); !r2)
+					if (auto r2 = m_bridge.notify_data_model_changed(0, reinterpret_cast<uint64_t>(static_cast<const RBX::Instance*>(current)), i); !r2)
 					{
 						RML_WARN("notify_data_model_changed failed: {}", r2.error());
 					}

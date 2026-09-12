@@ -33,7 +33,7 @@ namespace rml::dumper::recover
 	                                                         const disasm::Register value, const std::uint8_t width)
 	{
 		const auto found = std::ranges::find_if(trace.accesses, [&](const disasm::MemoryAccess& access) {
-			return access.is_write && access.object == object && access.value_register == value &&
+			return access.is_write && access.object == object && access.value_object == disasm::entry_object(value) &&
 			       access.width == width && access.displacement >= 0;
 		});
 

@@ -53,7 +53,7 @@ namespace RBX
 		std::uint64_t frame_budget;
 
 	private:
-		std::byte reserved_180[0x48];
+		std::byte reserved_180[0x68];
 	};
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
@@ -63,6 +63,6 @@ namespace RBX
 	RML_ASSERT_OFFSET(TaskSchedulerArbiter, job_slots, 0x20);
 	RML_ASSERT_OFFSET(TaskSchedulerArbiter, job_slot_capacity, 0x28);
 	RML_ASSERT_OFFSET(TaskSchedulerArbiter, frame_budget, 0x178);
-	RML_ASSERT_SIZE(TaskSchedulerArbiter, 0x1C8);
+	RML_ASSERT_SIZE(TaskSchedulerArbiter, 0x1E8);
 	RML_LAYOUT_DIAGNOSTIC_POP()
 }
