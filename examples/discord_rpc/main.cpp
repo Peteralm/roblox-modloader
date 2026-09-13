@@ -174,14 +174,12 @@ private:
 };
 
 
-#define DISCORD_RPC_MOD_API __declspec(dllexport)
-
 extern "C" {
-DISCORD_RPC_MOD_API ModBase *start_mod() {
+RML_MOD_ABI_EXPORT ModBase *start_mod() {
     return new discord_rpc();
 }
 
-DISCORD_RPC_MOD_API void uninstall_mod(const ModBase *mod) {
+RML_MOD_ABI_EXPORT void uninstall_mod(const ModBase *mod) {
     delete mod;
 }
 }
