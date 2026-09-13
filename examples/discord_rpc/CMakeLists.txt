@@ -12,15 +12,28 @@ FetchContent_Declare(
 message(STATUS "Downloading Discord Game SDK for ${CURRENT_MOD_NAME}...")
 FetchContent_MakeAvailable(discord_game_sdk_${CURRENT_MOD_NAME})
 
-if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+set(DISCORD_SDK_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+if (CMAKE_OSX_ARCHITECTURES)
+    set(DISCORD_SDK_ARCH "${CMAKE_OSX_ARCHITECTURES}")
+endif ()
+string(TOLOWER "${DISCORD_SDK_ARCH}" DISCORD_SDK_ARCH)
+
+if (DISCORD_SDK_ARCH MATCHES "^(aarch64|arm64)$")
+    set(DISCORD_SDK_LIB_DIR "${discord_game_sdk_${CURRENT_MOD_NAME}_SOURCE_DIR}/lib/aarch64")
+elseif (CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(DISCORD_SDK_LIB_DIR "${discord_game_sdk_${CURRENT_MOD_NAME}_SOURCE_DIR}/lib/x86_64")
 else ()
     set(DISCORD_SDK_LIB_DIR "${discord_game_sdk_${CURRENT_MOD_NAME}_SOURCE_DIR}/lib/x86")
 endif ()
 
 set(DISCORD_SDK_INCLUDE_DIR "${discord_game_sdk_${CURRENT_MOD_NAME}_SOURCE_DIR}/cpp")
-set(DISCORD_SDK_DLL_PATH "${DISCORD_SDK_LIB_DIR}/discord_game_sdk.dll")
-set(DISCORD_SDK_LIB_PATH "${DISCORD_SDK_LIB_DIR}/discord_game_sdk.dll.lib")
+if (RML_PLATFORM_WINDOWS)
+    set(DISCORD_SDK_DLL_PATH "${DISCORD_SDK_LIB_DIR}/discord_game_sdk.dll")
+    set(DISCORD_SDK_LIB_PATH "${DISCORD_SDK_LIB_DIR}/discord_game_sdk.dll.lib")
+else ()
+    set(DISCORD_SDK_DLL_PATH "${DISCORD_SDK_LIB_DIR}/discord_game_sdk.dylib")
+    set(DISCORD_SDK_LIB_PATH "${DISCORD_SDK_DLL_PATH}")
+endif ()
 
 file(GLOB DISCORD_SDK_SOURCES "${DISCORD_SDK_INCLUDE_DIR}/*.cpp")
 
