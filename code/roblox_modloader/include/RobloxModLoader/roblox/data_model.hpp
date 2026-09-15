@@ -112,10 +112,6 @@ namespace RBX
 
 		bool can_create_service() const override = 0;
 
-	private:
-		std::byte reserved_338[0x48];
-
-	public:
 		std::unique_ptr<SerializedExternalRefs> serialized_external_refs;
 
 	private:
@@ -158,12 +154,12 @@ namespace RBX
 	RML_ASSERT_OFFSET(DataModel, verb_container, 0x550);
 #else
 	RML_ASSERT_OFFSET(DataModel, workspace, 0x338);
-	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3A0);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x438);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x440);
-	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4C8);
-	RML_ASSERT_OFFSET(DataModel, type, 0x520);
-	RML_ASSERT_OFFSET(DataModel, verb_container, 0x528);
+	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x398);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x430);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x438);
+	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4C0);
+	RML_ASSERT_OFFSET(DataModel, type, 0x518);
+	RML_ASSERT_OFFSET(DataModel, verb_container, 0x520);
 #endif
 	RML_LAYOUT_DIAGNOSTIC_POP()
 }
