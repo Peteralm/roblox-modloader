@@ -3,18 +3,17 @@ using System.Runtime.InteropServices;
 namespace Roblox;
 
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct UDim2 : IEquatable<UDim2>, IRobloxDataType
+public readonly struct UDim2(UDim x, UDim y) : IEquatable<UDim2>, IRobloxDataType
 {
-    public UDim X { get; }
-    public UDim Y { get; }
-
-    public UDim2(UDim x, UDim y)
-    {
-        X = x;
-        Y = y;
-    }
+    public UDim X { get; } = x;
+    public UDim Y { get; } = y;
 
     public UDim2(float xScale, int xOffset, float yScale, int yOffset)
+        : this(new UDim(xScale, xOffset), new UDim(yScale, yOffset))
+    {
+    }
+
+    public UDim2(float xScale, float xOffset, float yScale, float yOffset)
         : this(new UDim(xScale, xOffset), new UDim(yScale, yOffset))
     {
     }
