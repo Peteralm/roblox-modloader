@@ -1,5 +1,6 @@
 
 #pragma once
+#include "early_mod_registry.hpp"
 #include "mod/imod_loader.hpp"
 #include "mod/mod_kind.hpp"
 #include "mod_registry.hpp"
@@ -16,8 +17,8 @@ namespace rml::native
 	class NativeModLoader final : public IModLoader
 	{
 	public:
-		explicit NativeModLoader(events::EventManager& event_manager) :
-		    m_event_manager(event_manager)
+		explicit NativeModLoader(events::EventManager& event_manager, EarlyModRegistry& early_registry = EarlyModRegistry::instance()) :
+		    m_event_manager(event_manager), m_early_registry(early_registry)
 		{
 		}
 		~NativeModLoader() override;
@@ -38,6 +39,7 @@ namespace rml::native
 	private:
 		ModRegistry m_registry;
 		events::EventManager& m_event_manager;
+		EarlyModRegistry& m_early_registry;
 	};
 
 } // namespace rml::native
