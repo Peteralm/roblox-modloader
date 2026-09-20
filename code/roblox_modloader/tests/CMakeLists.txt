@@ -39,6 +39,7 @@ if (ROBLOX_MODLOADER_BUILD_CORE_TESTS)
         target_compile_definitions(roblox_modloader_tests PRIVATE ROBLOX_MODLOADER_STATIC_DEFINE
                 RML_EARLY_FIXTURE_DIR="$<TARGET_FILE_DIR:early_fixture_success>")
         target_sources(roblox_modloader_tests PRIVATE
+                "${ROBLOX_MODLOADER_SOURCE_DIR}/native/class_factory_probe.cpp"
                 "${ROBLOX_MODLOADER_SOURCE_DIR}/native/early_mod_registry.cpp"
                 "${ROBLOX_MODLOADER_SOURCE_DIR}/native/native_mod_loader.cpp"
                 "${ROBLOX_MODLOADER_SOURCE_DIR}/native/mod_registry.cpp"
