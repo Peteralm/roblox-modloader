@@ -17,7 +17,7 @@
 #include <vector>
 
 namespace rml::jobs {
-    class JobManager final {
+    class RML_EXPORT JobManager final {
     public:
         explicit JobManager(ITaskScheduler &task_scheduler);
 

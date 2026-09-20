@@ -29,6 +29,7 @@ if (ROBLOX_MODLOADER_BUILD_CORE_TESTS)
             "${ROBLOX_MODLOADER_SOURCE_DIR}/config/config_serialization.cpp"
             "${ROBLOX_MODLOADER_SOURCE_DIR}/mod/mod_catalog.cpp"
             "${ROBLOX_MODLOADER_SOURCE_DIR}/mod/mod_kind.cpp"
+            "${ROBLOX_MODLOADER_SOURCE_DIR}/luau/load_observer.cpp"
     )
 
     setup_compiler_flags(roblox_modloader_tests)
