@@ -418,7 +418,20 @@ namespace rml::luau
 		}
 
 		lua_createtable(L, 0, 1);
-		lua_pushvalue(L, LUA_GLOBALSINDEX);
+		if (auto* owner = env.thread(); owner != nullptr && owner != L)
+		{
+			vm::StackGuard guard(owner);
+			lua_pushvalue(owner, LUA_GLOBALSINDEX);
+			const auto globals = vm::Ref::take(owner, -1);
+			if (!globals.push(L))
+			{
+				lua_pushvalue(L, LUA_GLOBALSINDEX);
+			}
+		}
+		else
+		{
+			lua_pushvalue(L, LUA_GLOBALSINDEX);
+		}
 		lua_setfield(L, -2, "__index");
 		lua_setreadonly(L, -1, true);
 		lua_setmetatable(L, -2);
