@@ -23,7 +23,7 @@ namespace
 		std::string root;
 		static inline Descriptors* current;
 		Descriptors() { current = this; }
-		RmlDescriptorRegistrationApi api{1, sizeof(RmlDescriptorRegistrationApi),
+		RmlDescriptorRegistrationApi api{RML_DESCRIPTOR_REGISTRATION_API_VERSION, sizeof(RmlDescriptorRegistrationApi),
 		    [](const char*) noexcept -> void* { return nullptr; },
 		    []() noexcept { return true; },
 		    [](std::uint32_t) noexcept -> void* { ++current->begins; return current; },
@@ -34,7 +34,8 @@ namespace
 			    return 0;
 		    },
 		    [](void*) noexcept { ++current->aborts; current->reserved = nullptr; },
-		    [](void*) noexcept { ++current->commits; current->published = current->reserved; current->reserved = nullptr; }};
+		    [](void*) noexcept { ++current->commits; current->published = current->reserved; current->reserved = nullptr; },
+		    [](const void* descriptor) noexcept -> const void* { return descriptor; }};
 		RmlGlobalInitContext context{1, nullptr, "fixture-studio", [](int, const char* message) noexcept {
 			++current->logs;
 			try { current->root = message; } catch (...) {}
@@ -170,7 +171,7 @@ TEST_CASE("early mod registry rejects incompatible descriptor APIs before entry"
 	Fixture fixture;
 	Descriptors descriptors;
 	SUBCASE("context ABI") { descriptors.context.abi_version = 2; }
-	SUBCASE("API version") { descriptors.api.version = 2; }
+	SUBCASE("API version") { descriptors.api.version = RML_DESCRIPTOR_REGISTRATION_API_VERSION + 1; }
 	SUBCASE("short API") { descriptors.api.size = 8; }
 	SUBCASE("missing API") { descriptors.context.descriptors = nullptr; }
 	SUBCASE("missing callback") { descriptors.api.commit_batch = nullptr; }

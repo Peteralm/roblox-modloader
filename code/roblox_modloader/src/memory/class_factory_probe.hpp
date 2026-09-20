@@ -4,7 +4,7 @@
 #include <optional>
 #include <span>
 
-namespace rml::native
+namespace rml::memory
 {
 	/// Answers whether a byte range can be read without faulting.
 	using ReadableFn = bool (*)(const void*, std::size_t) noexcept;
@@ -34,4 +34,4 @@ namespace rml::native
 	/// means the wrong offset and is refused.
 	bool install_factory(void* descriptor, const FactorySlot& slot, const void* factory, ReadableFn readable,
 	    ExecutableFn executable) noexcept;
-} // namespace rml::native
+} // namespace rml::memory

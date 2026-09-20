@@ -87,6 +87,38 @@ down manually in `on_unload`. Resolve `target_address` from the engine yourself 
 pattern scan or a known offset); see [`examples/internal_developer`](../examples/internal_developer)
 for a working hook.
 
+## Global-init mods
+
+A mod whose manifest declares `load_phase = "global_init"` is entered before Studio builds its
+class registry, through two extra exports:
+
+```cpp
+#include <RobloxModLoader/mod/global_init_mod.hpp>
+
+RML_EXPORT_GLOBAL_INIT_ABI_VERSION()
+
+extern "C" RML_GLOBAL_INIT_EXPORT int rml_global_init(const RmlGlobalInitContext* context) noexcept
+{
+    // Never let an exception cross this boundary; return nonzero to fail.
+}
+```
+
+`context->descriptors` is the only way to add a class the engine did not ship. It is valid for the
+duration of the call and nowhere else:
+
+- `find_class(name)` returns a live class descriptor, or `nullptr`.
+- `class_factory(descriptor)` returns that class's creation function, or `nullptr` when the engine
+  refuses to build it. A cloned descriptor needs one of these, or `Instance.new` would reject it.
+- `begin_batch(count)` opens a reservation; `reserve_class` validates and stages one class;
+  `abort_batch` discards the whole reservation; `commit_batch` publishes it and cannot fail.
+
+Reserve every class first and commit once. `reserve_class` returns nonzero on refusal: `1` for a
+malformed payload, `2` for a name collision or a descriptor whose own name does not match, `3` for
+a duplicate within the batch, `4` for a missing base class, and `5` when the factory could not be
+published. The loader locates the factory slot by contrasting classes the engine can build with
+classes it refuses; if a Studio update changes that layout the probe finds nothing and every
+reservation fails, rather than writing into an unknown field.
+
 ## Notes
 
 - Keep hook bodies small and fast — they run on engine threads.

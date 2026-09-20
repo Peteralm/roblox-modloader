@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace rml::native
+namespace rml::memory
 {
 	namespace
 	{
@@ -96,9 +96,7 @@ namespace rml::native
 		const auto* current = *reinterpret_cast<const void* const*>(address);
 		if (current != slot.non_creatable_value && !executable(current))
 			return false;
-		if (current == factory)
-			return false;
 		*reinterpret_cast<const void**>(address) = factory;
 		return true;
 	}
-} // namespace rml::native
+} // namespace rml::memory

@@ -3,7 +3,7 @@
 #include "platform/windows/hooking/bootstrap_detour.hpp"
 #include "mod/mod_catalog.hpp"
 #include "native/early_mod_registry.hpp"
-#include "native/class_factory_probe.hpp"
+#include "memory/class_factory_probe.hpp"
 #include "RobloxModLoader/mod/global_init_mod.hpp"
 
 #include <Windows.h>
@@ -181,11 +181,11 @@ namespace rml::platform::windows
 		constexpr const char* kNonCreatableProbes[] = {"Workspace", "Lighting", "RunService"};
 		constexpr std::size_t kDescriptorSearchBytes = 0x200;
 
-		const native::FactorySlot* factory_slot() noexcept
+		const memory::FactorySlot* factory_slot() noexcept
 		{
 			static bool probed = false;
 			static bool usable = false;
-			static native::FactorySlot slot{};
+			static memory::FactorySlot slot{};
 			if (probed)
 				return usable ? &slot : nullptr;
 			probed = true;
@@ -202,7 +202,7 @@ namespace rml::platform::windows
 				if (auto* descriptor = find_class(name))
 					refusing[refusing_count++] = descriptor;
 
-			const auto found = native::probe_factory_slot({creatable, creatable_count},
+			const auto found = memory::probe_factory_slot({creatable, creatable_count},
 			    {refusing, refusing_count}, kDescriptorSearchBytes, process_readable, process_executable);
 			if (!found)
 			{
@@ -315,7 +315,7 @@ namespace rml::platform::windows
 			// Without a published factory the class would exist in the registry yet
 			// refuse Instance.new, which is the shape that hung Studio before.
 			const auto* slot = factory_slot();
-			if (!slot || !native::install_factory(const_cast<void*>(registration->descriptor), *slot,
+			if (!slot || !memory::install_factory(const_cast<void*>(registration->descriptor), *slot,
 			        registration->factory, process_readable, process_executable))
 				return 5;
 
@@ -364,9 +364,21 @@ namespace rml::platform::windows
 			release_batch(batch, true);
 		}
 
+		const void* class_factory(const void* descriptor) noexcept
+		{
+			const auto* slot = factory_slot();
+			if (!descriptor || !slot)
+				return nullptr;
+			const auto* address = static_cast<const std::byte*>(descriptor) + slot->offset;
+			if (!process_readable(address, sizeof(void*)))
+				return nullptr;
+			const auto* value = *reinterpret_cast<const void* const*>(address);
+			return process_executable(value) ? value : nullptr;
+		}
+
 		constexpr RmlDescriptorRegistrationApi kDescriptorApi{RML_DESCRIPTOR_REGISTRATION_API_VERSION,
 		    sizeof(RmlDescriptorRegistrationApi), find_class, registry_is_mutable, begin_batch,
-		    reserve_class, abort_batch, commit_batch};
+		    reserve_class, abort_batch, commit_batch, class_factory};
 
 		void initialize_log_path() noexcept
 		{

@@ -1,12 +1,12 @@
 #include <doctest/doctest.h>
 
-#include "native/class_factory_probe.hpp"
+#include "memory/class_factory_probe.hpp"
 
 #include <array>
 #include <cstddef>
 #include <vector>
 
-namespace rml::native
+namespace rml::memory
 {
 	namespace
 	{
@@ -151,10 +151,6 @@ namespace rml::native
 
 		CHECK_FALSE(install_factory(&wrong, slot, g_code_a.data(), fake_readable, fake_executable));
 		CHECK(wrong.slots[3] == g_data.data());
-
-		Descriptor same{};
-		same.slots[3] = g_code_a.data();
-		CHECK_FALSE(install_factory(&same, slot, g_code_a.data(), fake_readable, fake_executable));
 
 		Descriptor target{};
 		CHECK_FALSE(install_factory(nullptr, slot, g_code_a.data(), fake_readable, fake_executable));
