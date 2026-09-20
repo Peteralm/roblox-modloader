@@ -5,6 +5,9 @@
 #include "dotnet/dotnet_mod_loader.hpp"
 #include "native/native_mod_loader.hpp"
 #include "filesystem/directory.hpp"
+#if defined(RML_WINDOWS)
+#include "core/early_bootstrap.hpp"
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -41,9 +44,33 @@ namespace rml
 	{
 		const auto native = m_loaders.find(ModKind::Native);
 		const auto dotnet = m_loaders.find(ModKind::Dotnet);
-		const auto errors = load_catalog(catalog,
+		auto errors = load_catalog(catalog,
 		    native == m_loaders.end() ? nullptr : native->second.get(),
 		    dotnet == m_loaders.end() ? nullptr : dotnet->second.get());
+#if defined(RML_WINDOWS)
+		const bool global_init_completed =
+		    platform::windows::EarlyBootstrap::state() == platform::windows::BootstrapState::Completed;
+		for (const auto& mod : catalog.mods)
+		{
+			if (!mod.enabled || !mod.auto_load || mod.load_phase != config::ModLoadPhase::GlobalInit)
+				continue;
+			if (!global_init_completed)
+			{
+				errors.push_back("Global-init bootstrap did not complete for " + mod.root.string());
+				continue;
+			}
+			const auto load_entry = [&errors](IModLoader* loader, const std::filesystem::path& path) {
+				if (!loader)
+				errors.push_back("No loader registered for " + path.string());
+				else if (const auto loaded = loader->load(path); !loaded)
+					errors.push_back("Failed to load " + path.string() + ": " + loaded.error());
+			};
+			if (mod.native_entry)
+				load_entry(native == m_loaders.end() ? nullptr : native->second.get(), *mod.native_entry);
+			for (const auto& entry : mod.dotnet_entries)
+				load_entry(dotnet == m_loaders.end() ? nullptr : dotnet->second.get(), entry);
+		}
+#endif
 		for (const auto& error : errors)
 			RML_ERROR("{}", error);
 	}

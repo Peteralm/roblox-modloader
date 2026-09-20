@@ -47,6 +47,25 @@ execute_process(COMMAND ${CMAKE_COMMAND}
 set_source_files_properties("${RML_VERSION_OUTPUT}" PROPERTIES GENERATED TRUE)
 list(APPEND MODLOADER_SOURCES "${RML_VERSION_OUTPUT}")
 
+if (RML_PLATFORM_WINDOWS)
+    set(RML_BOOTSTRAP_PROFILE
+            "${ROBLOX_MODLOADER_ROOT_DIR}/compatibility/studio-0.739.toml")
+    set(RML_BOOTSTRAP_PROFILE_SCRIPT
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_bootstrap_profile.cmake")
+    set(RML_BOOTSTRAP_PROFILE_HEADER
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/bootstrap_profile.hpp")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+            "${RML_BOOTSTRAP_PROFILE}" "${RML_BOOTSTRAP_PROFILE_SCRIPT}")
+    execute_process(
+            COMMAND ${CMAKE_COMMAND}
+            "-DINPUT=${RML_BOOTSTRAP_PROFILE}"
+            "-DOUTPUT=${RML_BOOTSTRAP_PROFILE_HEADER}"
+            -P "${RML_BOOTSTRAP_PROFILE_SCRIPT}"
+            COMMAND_ERROR_IS_FATAL ANY
+    )
+    list(APPEND MODLOADER_SOURCES "${RML_BOOTSTRAP_PROFILE_HEADER}")
+endif ()
+
 add_custom_target(roblox_modloader_version
         COMMAND ${CMAKE_COMMAND}
         "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
@@ -81,6 +100,7 @@ target_include_directories(roblox_modloader PRIVATE
         "${ROBLOX_MODLOADER_SOURCE_DIR}"
         "${ROBLOX_MODLOADER_INCLUDE_DIR}"
         "${ROBLOX_MODLOADER_SOURCE_DIR}/platform/${RML_PLATFORM_ID}"
+        "${CMAKE_CURRENT_BINARY_DIR}"
 )
 
 set_target_properties(roblox_modloader PROPERTIES

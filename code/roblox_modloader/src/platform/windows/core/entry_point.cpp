@@ -1,5 +1,6 @@
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/core/entry_point.hpp"
+#include "core/early_bootstrap.hpp"
 
 RML_LOG_SCOPE("Bootstrap");
 
@@ -18,6 +19,8 @@ namespace rml
 
 		g_hinstance = module;
 		s_driver = driver;
+
+		platform::windows::EarlyBootstrap::arm(module);
 
 		const HANDLE bootstrap_thread = CreateThread(
 		    nullptr,

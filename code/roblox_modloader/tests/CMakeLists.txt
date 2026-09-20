@@ -14,6 +14,7 @@ if (ROBLOX_MODLOADER_BUILD_CORE_TESTS)
     target_include_directories(roblox_modloader_tests PRIVATE
             "${ROBLOX_MODLOADER_INCLUDE_DIR}"
             "${ROBLOX_MODLOADER_SOURCE_DIR}"
+            "${CMAKE_CURRENT_BINARY_DIR}/.."
     )
 
     target_link_libraries(roblox_modloader_tests PRIVATE
@@ -46,6 +47,9 @@ if (ROBLOX_MODLOADER_BUILD_CORE_TESTS)
                 "${ROBLOX_MODLOADER_SOURCE_DIR}/mod/ModBase.cpp"
                 "${ROBLOX_MODLOADER_SOURCE_DIR}/mod/mod_paths.cpp"
                 "${ROBLOX_MODLOADER_SOURCE_DIR}/mod/events.cpp"
+                "${ROBLOX_MODLOADER_SOURCE_DIR}/platform/windows/core/early_bootstrap.cpp"
+                "${ROBLOX_MODLOADER_SOURCE_DIR}/platform/windows/hooking/bootstrap_detour.cpp"
+                "${RML_BOOTSTRAP_PROFILE_HEADER}"
         )
         function(add_early_fixture name)
             add_library(early_fixture_${name} SHARED fixtures/early_mod_fixture.cpp
