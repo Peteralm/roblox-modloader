@@ -567,12 +567,6 @@ namespace rml::luau
 
 		barrier_into(L, L, upvalue);
 
-		if (upvalue->tt == LUA_TTABLE)
-		{
-			lua_pushnil(L);
-			return 1;
-		}
-
 		auto* state = access::state(L);
 		access::copy_value(state->top, upvalue);
 		access::advance_top(state);
@@ -613,17 +607,8 @@ namespace rml::luau
 			const auto* upvalue = access::value_at(upvalues, i);
 
 			barrier_into(L, L, upvalue);
-
-			if (upvalue->tt == LUA_TFUNCTION || upvalue->tt == LUA_TTABLE)
-			{
-				lua_pushnil(L);
-			}
-			else
-			{
-				access::copy_value(state->top, upvalue);
-				access::advance_top(state);
-			}
-
+			access::copy_value(state->top, upvalue);
+			access::advance_top(state);
 			lua_rawseti(L, -2, i + 1);
 		}
 
