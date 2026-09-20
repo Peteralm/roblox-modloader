@@ -145,21 +145,21 @@ namespace RBX
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
 #if defined(RML_WINDOWS)
-	RML_ASSERT_OFFSET(DataModel, workspace, 0x348);
-	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3B0);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x448);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x450);
-	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4F0);
-	RML_ASSERT_OFFSET(DataModel, type, 0x548);
-	RML_ASSERT_OFFSET(DataModel, verb_container, 0x550);
+	RML_ASSERT_OFFSET(DataModel, workspace, 0x350);
+	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3B8);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x450);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x458);
+	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4F8);
+	RML_ASSERT_OFFSET(DataModel, type, 0x550);
+	RML_ASSERT_OFFSET(DataModel, verb_container, 0x558);
 #else
-	RML_ASSERT_OFFSET(DataModel, workspace, 0x338);
-	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x398);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x430);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x438);
-	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4C0);
-	RML_ASSERT_OFFSET(DataModel, type, 0x518);
-	RML_ASSERT_OFFSET(DataModel, verb_container, 0x520);
+	RML_ASSERT_OFFSET(DataModel, workspace, 0x340);
+	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3A0);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x438);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x440);
+	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4C8);
+	RML_ASSERT_OFFSET(DataModel, type, 0x520);
+	RML_ASSERT_OFFSET(DataModel, verb_container, 0x528);
 #endif
 	RML_LAYOUT_DIAGNOSTIC_POP()
 }

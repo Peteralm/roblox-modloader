@@ -15,6 +15,8 @@ namespace RBX
 	class DataModelProp
 	{
 	public:
+		virtual ~DataModelProp() = default;
+
 		std::string place_id_string;
 		std::string universe_id_string;
 		std::string job_id;
@@ -30,17 +32,17 @@ namespace RBX
 	};
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
-	RML_ASSERT_OFFSET(DataModelProp, place_id_string, 0x00);
+	RML_ASSERT_OFFSET(DataModelProp, place_id_string, 0x08);
 #if defined(RML_WINDOWS)
-	RML_ASSERT_OFFSET(DataModelProp, universe_id_string, 0x20);
-	RML_ASSERT_OFFSET(DataModelProp, job_id, 0x40);
-	RML_ASSERT_OFFSET(DataModelProp, workspace, 0x60);
-	RML_ASSERT_SIZE(DataModelProp, 0xC8);
+	RML_ASSERT_OFFSET(DataModelProp, universe_id_string, 0x28);
+	RML_ASSERT_OFFSET(DataModelProp, job_id, 0x48);
+	RML_ASSERT_OFFSET(DataModelProp, workspace, 0x68);
+	RML_ASSERT_SIZE(DataModelProp, 0xD0);
 #else
-	RML_ASSERT_OFFSET(DataModelProp, universe_id_string, 0x18);
-	RML_ASSERT_OFFSET(DataModelProp, job_id, 0x30);
-	RML_ASSERT_OFFSET(DataModelProp, workspace, 0x48);
-	RML_ASSERT_SIZE(DataModelProp, 0xA8);
+	RML_ASSERT_OFFSET(DataModelProp, universe_id_string, 0x20);
+	RML_ASSERT_OFFSET(DataModelProp, job_id, 0x38);
+	RML_ASSERT_OFFSET(DataModelProp, workspace, 0x50);
+	RML_ASSERT_SIZE(DataModelProp, 0xB0);
 #endif
 	RML_LAYOUT_DIAGNOSTIC_POP()
 }

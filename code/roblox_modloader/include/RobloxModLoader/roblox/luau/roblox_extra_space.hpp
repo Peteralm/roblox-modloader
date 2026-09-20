@@ -86,19 +86,19 @@ namespace RBX::Luau {
         WeakRef capability_defining_instance;
 
     private:
-        std::byte padding_3[0x10];
+        std::byte padding_3[0x8];
 
     public:
         WeakRef script;
 
     private:
-        std::byte padding_4[0x10];
+        std::byte padding_4[0x8];
 
     public:
         uint64_t capabilities;
 
     private:
-        std::byte padding_5[0x10];
+        std::byte padding_5[0x20];
     };
 
     RML_LAYOUT_DIAGNOSTIC_PUSH()
@@ -107,8 +107,8 @@ namespace RBX::Luau {
     RML_ASSERT_OFFSET(RobloxExtraSpace, context, 0x30);
     RML_ASSERT_OFFSET(RobloxExtraSpace, actor, 0x50);
     RML_ASSERT_OFFSET(RobloxExtraSpace, capability_defining_instance, 0x60);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, script, 0x80);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, capabilities, 0xA0);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, script, 0x78);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, capabilities, 0x90);
     RML_ASSERT_SIZE(RobloxExtraSpace, 0xB8);
     RML_LAYOUT_DIAGNOSTIC_POP()
 }
