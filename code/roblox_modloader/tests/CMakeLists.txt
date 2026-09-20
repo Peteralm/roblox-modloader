@@ -22,6 +22,7 @@ if (ROBLOX_MODLOADER_BUILD_CORE_TESTS)
 
     target_sources(roblox_modloader_tests PRIVATE
             "${ROBLOX_MODLOADER_SOURCE_DIR}/config/config_serialization.cpp"
+            "${ROBLOX_MODLOADER_SOURCE_DIR}/mod/mod_catalog.cpp"
     )
 
     setup_compiler_flags(roblox_modloader_tests)

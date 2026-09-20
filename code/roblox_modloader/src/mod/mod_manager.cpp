@@ -1,4 +1,5 @@
 #include "mod_manager.hpp"
+#include "mod_catalog.hpp"
 
 #include "RobloxModLoader/internal/common.hpp"
 #include "dotnet/dotnet_mod_loader.hpp"
@@ -28,24 +29,36 @@ namespace rml
 		                     mods_path.value() / mod_kind_folder_name(ModKind::Dotnet)),
 		    ModKind::Dotnet);
 
-		for (auto mod_dir : std::filesystem::directory_iterator(mods_path.value()))
+		const auto catalog = discover_native_mods(mods_path->parent_path());
+		for (const auto& error : catalog.errors)
 		{
-			if (!mod_dir.is_directory())
+			RML_ERROR("Skipping invalid mod metadata '{}': {}", error.source.string(), error.message);
+		}
+
+		for (const auto& mod : catalog.roots)
+		{
+			if (!mod.enabled || !mod.auto_load)
 			{
 				continue;
 			}
 
-			for (const auto& folder : kModKindFolders)
+			const auto native = std::ranges::find(catalog.native_mods, mod.folder_id, &NativeModDefinition::folder_id);
+			if (native != catalog.native_mods.end() && native->load_phase == config::ModLoadPhase::Normal)
 			{
-				auto result = load_directory(mod_dir.path() / folder.folder_name);
-				if (!result.has_value())
+				if (const auto loaded = load(native->dll); !loaded)
 				{
-					switch (result.error().type)
-					{
-					case ModManagerError::Type::DirectoryNotFound: break;
-					case ModManagerError::Type::NoLoaderFound: break;
-					default: RML_ERROR("Failed to load {} mods: {}", folder.folder_name, result.error().message); break;
-					}
+					RML_ERROR("Failed to load native mod '{}': {}", native->name, loaded.error());
+				}
+			}
+
+			const auto dotnet = load_directory(mod.root / mod_kind_folder_name(ModKind::Dotnet));
+			if (!dotnet)
+			{
+				switch (dotnet.error().type)
+				{
+				case ModManagerError::Type::DirectoryNotFound:
+				case ModManagerError::Type::NoLoaderFound: break;
+				default: RML_ERROR("Failed to load dotnet mod '{}': {}", mod.name, dotnet.error().message); break;
 				}
 			}
 		}
