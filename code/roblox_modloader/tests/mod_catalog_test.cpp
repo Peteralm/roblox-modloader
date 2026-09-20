@@ -370,4 +370,26 @@ auto_load = false
 	                   {"native", "Beta.dll"}, {"dotnet", "Beta.Managed.dll"}});
 }
 
+
+TEST_CASE("mod catalog selects one managed entry beside private dependencies")
+{
+	CatalogSandbox sandbox;
+	sandbox.file("mods/mixed/native/Early.dll");
+	sandbox.file("mods/mixed/dotnet/CommandSupervisor.UI.dll");
+	sandbox.file("mods/mixed/dotnet/StudioDock.dll");
+	sandbox.file("mods/mixed/mod.toml", R"(
+name = "Mixed"
+[runtime]
+load_phase = "global_init"
+entry = "Early.dll"
+managed_entry = "CommandSupervisor.UI.dll"
+)");
+
+	const auto catalog = discover_mods(sandbox.root());
+	REQUIRE(catalog.errors.empty());
+	REQUIRE(catalog.mods.size() == 1);
+	REQUIRE(catalog.mods[0].dotnet_entries.size() == 1);
+	CHECK(catalog.mods[0].dotnet_entries[0].filename() == "CommandSupervisor.UI.dll");
+}
+
 } // namespace rml

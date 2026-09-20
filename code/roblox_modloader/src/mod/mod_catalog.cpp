@@ -30,6 +30,7 @@ namespace
 		std::string name;
 		config::ModConfig::Runtime runtime;
 		std::optional<std::filesystem::path> entry;
+		std::optional<std::filesystem::path> managed_entry;
 		bool has_static_identity{};
 		bool has_explicit_load_phase{};
 	};
@@ -218,6 +219,16 @@ namespace
 				}
 				manifest.entry = std::filesystem::path(*entry);
 			}
+			if (const auto managed_node = (*runtime)["managed_entry"])
+			{
+				const auto managed_entry = managed_node.value<std::string>();
+				if (!managed_entry || managed_entry->empty())
+				{
+					result.errors.push_back({path, "'runtime.managed_entry' must be a non-empty string"});
+					return std::nullopt;
+				}
+				manifest.managed_entry = std::filesystem::path(*managed_entry);
+			}
 		}
 
 		if (manifest.runtime.load_phase == config::ModLoadPhase::GlobalInit
@@ -342,7 +353,8 @@ namespace
 	}
 
 	[[nodiscard]] std::optional<std::vector<std::filesystem::path>> collect_dotnet_entries(
-	    const std::filesystem::path& root, ModCatalogResult& result)
+	    const std::filesystem::path& root, const std::optional<std::filesystem::path>& selected_entry,
+	    ModCatalogResult& result)
 	{
 		const auto dotnet_path = root / mod_kind_folder_name(ModKind::Dotnet);
 		std::error_code error;
@@ -353,11 +365,34 @@ namespace
 			return std::nullopt;
 		}
 		if (!has_dotnet)
+		{
+			if (selected_entry)
+			{
+				result.errors.push_back({root / "mod.toml", "selected dotnet directory is missing"});
+				return std::nullopt;
+			}
 			return std::vector<std::filesystem::path>{};
+		}
 
 		const auto dotnet_root = canonical_descendant(dotnet_path, root, result, "dotnet directory");
 		if (!dotnet_root)
 			return std::nullopt;
+		if (selected_entry)
+		{
+			if (!safe_relative_entry(*selected_entry))
+			{
+				result.errors.push_back({root / "mod.toml", "runtime.managed_entry must stay under the dotnet directory"});
+				return std::nullopt;
+			}
+			const auto selected = *dotnet_root / *selected_entry;
+			if (!std::filesystem::is_regular_file(selected, error) || error || selected.extension() != ".dll")
+			{
+				result.errors.push_back({root / "mod.toml", "runtime.managed_entry does not select a managed library"});
+				return std::nullopt;
+			}
+			const auto canonical = canonical_descendant(selected, *dotnet_root, result, "managed entry");
+			return canonical ? std::optional{std::vector<std::filesystem::path>{*canonical}} : std::nullopt;
+		}
 		std::vector<std::filesystem::path> entries;
 		std::filesystem::directory_iterator it(*dotnet_root, error);
 		const std::filesystem::directory_iterator end;
@@ -456,7 +491,7 @@ namespace
 			const auto native = select_native_entry(*root, manifest.entry, manifest.runtime.load_phase, result);
 			if (!native.valid)
 				continue;
-			const auto dotnet = collect_dotnet_entries(*root, result);
+			const auto dotnet = collect_dotnet_entries(*root, manifest.managed_entry, result);
 			if (!dotnet)
 				continue;
 
