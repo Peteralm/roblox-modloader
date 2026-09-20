@@ -29,6 +29,12 @@ namespace rml::config
 		io_error
 	};
 
+	enum class ModLoadPhase : std::uint8_t
+	{
+		Normal,
+		GlobalInit
+	};
+
 	template<typename T>
 	using ConfigResult = std::expected<T, ConfigError>;
 	using ConfigValue = std::variant<bool, std::int64_t, double, std::string, std::filesystem::path>;
@@ -80,6 +86,7 @@ namespace rml::config
 			bool enabled{true};
 			bool auto_load{true};
 			std::int32_t priority{0};
+			ModLoadPhase load_phase{ModLoadPhase::Normal};
 			std::optional<std::filesystem::path> dependencies_path;
 		} runtime;
 

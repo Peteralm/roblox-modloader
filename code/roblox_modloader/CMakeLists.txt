@@ -174,6 +174,10 @@ setup_dotnet_hosting(RobloxModLoader INTERFACE)
 
 set(RML_LUA_LIBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources/luau")
 
+if (ROBLOX_MODLOADER_BUILD_CORE_TESTS)
+    add_subdirectory(tests)
+endif ()
+
 if (ROBLOX_MODLOADER_INSTALL)
     include(GNUInstallDirs)
     install(DIRECTORY "${RML_LUA_LIBS_DIR}/"
