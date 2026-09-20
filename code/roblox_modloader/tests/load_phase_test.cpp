@@ -31,7 +31,25 @@ TEST_CASE("unknown load phase is rejected")
 {
 	const auto parsed = toml::parse("name='x'\n[runtime]\nload_phase='later'");
 	REQUIRE(static_cast<bool>(parsed));
-	CHECK_FALSE(static_cast<bool>(serialization::mod_config_from_toml(parsed.table())));
+	const auto config = serialization::mod_config_from_toml(parsed.table());
+	REQUIRE_FALSE(static_cast<bool>(config));
+	CHECK(config.error() == ConfigError::parse_error);
+}
+
+TEST_CASE("non-string load phase is rejected")
+{
+	const char* docs[] = {
+		"name='x'\n[runtime]\nload_phase=1",
+		"name='x'\n[runtime]\nload_phase=true",
+	};
+	for (const char* doc : docs)
+	{
+		const auto parsed = toml::parse(doc);
+		REQUIRE(static_cast<bool>(parsed));
+		const auto config = serialization::mod_config_from_toml(parsed.table());
+		REQUIRE_FALSE(static_cast<bool>(config));
+		CHECK(config.error() == ConfigError::parse_error);
+	}
 }
 
 } // namespace rml::config
