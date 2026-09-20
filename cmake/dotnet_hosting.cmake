@@ -274,10 +274,13 @@ if (RML_ENABLE_DOTNET_HOSTING)
         file(WRITE "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "{\n")
         file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "  \"runtimeOptions\": {\n")
         file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "    \"tfm\": \"${_rml_tfm}\",\n")
-        file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "    \"rollForward\": \"Minor\",\n")
+        # Pinning the newest released patch fails on machines that only have an
+        # older one, because roll-forward never moves down. Request the channel
+        # baseline and let hostfxr pick whichever patch is installed.
+        file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "    \"rollForward\": \"LatestMinor\",\n")
         file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "    \"framework\": {\n")
         file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "      \"name\": \"Microsoft.NETCore.App\",\n")
-        file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "      \"version\": \"${RML_DOTNET_RUNTIME_VERSION}\"\n")
+        file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "      \"version\": \"${RML_DOTNET_CHANNEL}.0\"\n")
         file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "    }\n")
         file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "  }\n")
         file(APPEND "${RML_DOTNET_GLOBAL_RUNTIME_CONFIG}" "}\n")

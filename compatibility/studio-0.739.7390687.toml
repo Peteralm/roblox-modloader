@@ -1,0 +1,28 @@
+build = "0.739.0.7390687"
+pe_timestamp = 2773514034
+size_of_image = 241799168
+sha256 = "996c3666e2872bf62d5db78bbfe65cd4fe78a120b110c01d191e3410dc0dbd01"
+
+[global_init]
+window_rva = 117061808
+registry_vector_rva = 227191304
+registry_frozen_rva = 227193376
+engine_allocate_rva = 125708384
+engine_free_rva = 125708512
+class_count_rva = 227191160
+overwrite_size = 14
+signature = "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC A0 00 00 00 C6 05"
+
+[evidence]
+notes = """
+Derived from the 0.732 profile by shape, not by offset arithmetic alone.
+The 30-byte signature occurs exactly once in .text, at window_rva.
+Every rip-relative operand inside the first 512 bytes of the window matches the
+0.732 window one-for-one at identical instruction offsets (17 of 17), which pins
+registry_frozen (mov byte ptr, offset 28), class_count (offset 35) and the
+descriptor scratch globals. registry_vector is confirmed independently: the four
+code sites that reference it sit at the same offsets from the window in both
+builds (window+0x57E, +0x957, +0x990, and one in a later function).
+engine_allocate and engine_free were relocated by matching the first 24 bytes of
+each 0.732 function; both signatures occur exactly once in 0.739 .text.
+"""

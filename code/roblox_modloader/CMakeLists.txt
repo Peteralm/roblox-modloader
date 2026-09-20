@@ -48,17 +48,18 @@ set_source_files_properties("${RML_VERSION_OUTPUT}" PROPERTIES GENERATED TRUE)
 list(APPEND MODLOADER_SOURCES "${RML_VERSION_OUTPUT}")
 
 if (RML_PLATFORM_WINDOWS)
-    set(RML_BOOTSTRAP_PROFILE
-            "${ROBLOX_MODLOADER_ROOT_DIR}/compatibility/studio-0.739.toml")
+    file(GLOB RML_BOOTSTRAP_PROFILES
+            "${ROBLOX_MODLOADER_ROOT_DIR}/compatibility/studio-*.toml")
+    list(SORT RML_BOOTSTRAP_PROFILES)
     set(RML_BOOTSTRAP_PROFILE_SCRIPT
             "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_bootstrap_profile.cmake")
     set(RML_BOOTSTRAP_PROFILE_HEADER
             "${CMAKE_CURRENT_BINARY_DIR}/generated/bootstrap_profile.hpp")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-            "${RML_BOOTSTRAP_PROFILE}" "${RML_BOOTSTRAP_PROFILE_SCRIPT}")
+            ${RML_BOOTSTRAP_PROFILES} "${RML_BOOTSTRAP_PROFILE_SCRIPT}")
     execute_process(
             COMMAND ${CMAKE_COMMAND}
-            "-DINPUT=${RML_BOOTSTRAP_PROFILE}"
+            "-DINPUTS=${RML_BOOTSTRAP_PROFILES}"
             "-DOUTPUT=${RML_BOOTSTRAP_PROFILE_HEADER}"
             -P "${RML_BOOTSTRAP_PROFILE_SCRIPT}"
             COMMAND_ERROR_IS_FATAL ANY
