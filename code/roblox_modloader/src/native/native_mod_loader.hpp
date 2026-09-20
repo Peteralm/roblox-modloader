@@ -1,6 +1,7 @@
 
 #pragma once
 #include "mod/imod_loader.hpp"
+#include "mod/mod_kind.hpp"
 #include "mod_registry.hpp"
 
 #include <RobloxModLoader/internal/common.hpp>
@@ -26,13 +27,11 @@ namespace rml::native
 		std::expected<void, std::string> reload(const std::filesystem::path& path) override;
 		[[nodiscard]] std::vector<std::filesystem::path> extensions() const override
 		{
-#if defined(RML_WINDOWS)
-			return {".dll"};
-#elif defined(RML_MACOS)
-			return {".dylib", ".so"};
-#else
-			return {".so"};
-#endif
+			std::vector<std::filesystem::path> result;
+			result.reserve(kNativeModExtensions.size());
+			for (const auto extension : kNativeModExtensions)
+				result.emplace_back(extension);
+			return result;
 		}
 		void unload_all() override;
 

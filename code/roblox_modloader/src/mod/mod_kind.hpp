@@ -25,6 +25,14 @@ namespace rml
 	    {ModKind::Scripts, "scripts"},
 	}};
 
+#if defined(_WIN32)
+	inline constexpr std::array<std::string_view, 1> kNativeModExtensions{".dll"};
+#elif defined(__APPLE__)
+	inline constexpr std::array<std::string_view, 2> kNativeModExtensions{".dylib", ".so"};
+#else
+	inline constexpr std::array<std::string_view, 1> kNativeModExtensions{".so"};
+#endif
+
 	[[nodiscard]] std::optional<ModKind> mod_kind_from_folder(std::string_view folder_name) noexcept;
 	[[nodiscard]] std::string_view mod_kind_folder_name(ModKind kind) noexcept;
 }

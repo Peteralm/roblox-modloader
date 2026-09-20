@@ -1,6 +1,7 @@
 #include "mod_catalog.hpp"
 
 #include "RobloxModLoader/config/config_serialization.hpp"
+#include "mod_kind.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -21,6 +22,7 @@ namespace
 		std::optional<bool> enabled;
 		std::optional<bool> auto_load;
 		std::optional<std::int32_t> priority;
+		bool valid{true};
 	};
 
 	struct ManifestData
@@ -32,12 +34,16 @@ namespace
 		bool has_explicit_load_phase{};
 	};
 
-	[[nodiscard]] std::filesystem::path canonical_path(const std::filesystem::path& path)
+
+	[[nodiscard]] bool is_missing(const std::error_code& error)
 	{
-		std::error_code error;
-		const auto canonical = std::filesystem::weakly_canonical(path, error);
-		return error ? path.lexically_normal() : canonical;
+		return error == std::errc::no_such_file_or_directory;
 	}
+	struct NativeSelection
+	{
+		std::optional<std::filesystem::path> entry;
+		bool valid{true};
+	};
 
 	[[nodiscard]] std::optional<toml::table> read_toml(
 	    const std::filesystem::path& path, ModCatalogResult& result)
@@ -58,7 +64,6 @@ namespace
 			        + std::to_string(error.source().begin.column) + ")"});
 			return std::nullopt;
 		}
-
 		return std::move(parsed).table();
 	}
 
@@ -112,7 +117,6 @@ namespace
 		const auto table = read_toml(path, result);
 		if (!table)
 			return {};
-
 		const auto mods_node = (*table)["mods"];
 		if (!mods_node)
 			return {};
@@ -139,7 +143,6 @@ namespace
 				result.errors.push_back({path, "mods[" + std::to_string(index) + "] has a non-string identity"});
 				continue;
 			}
-
 			if (!policy.id && !policy.name)
 			{
 				result.errors.push_back({path, "mods[" + std::to_string(index) + "] has no id or name"});
@@ -153,11 +156,10 @@ namespace
 				    || !read_optional_bool(*runtime, "auto_load", policy.auto_load)
 				    || !read_optional_priority(*runtime, policy.priority))
 				{
+					policy.valid = false;
 					result.errors.push_back({path, "mods[" + std::to_string(index) + "] has invalid runtime policy"});
-					continue;
 				}
 			}
-
 			policies.push_back(std::move(policy));
 		}
 		return policies;
@@ -194,16 +196,10 @@ namespace
 		if (const auto runtime_node = (*table)["runtime"])
 		{
 			const auto* runtime = runtime_node.as_table();
-			if (!runtime)
-			{
-				result.errors.push_back({path, "'runtime' must be a table"});
-				return std::nullopt;
-			}
-
 			std::optional<bool> enabled;
 			std::optional<bool> auto_load;
 			std::optional<std::int32_t> priority;
-			if (!read_optional_bool(*runtime, "enabled", enabled)
+			if (!runtime || !read_optional_bool(*runtime, "enabled", enabled)
 			    || !read_optional_bool(*runtime, "auto_load", auto_load)
 			    || !read_optional_priority(*runtime, priority))
 			{
@@ -233,81 +229,155 @@ namespace
 		return manifest;
 	}
 
-	[[nodiscard]] bool is_native_library(const std::filesystem::path& path)
+	[[nodiscard]] bool is_contained(const std::filesystem::path& path, const std::filesystem::path& boundary)
 	{
-		const auto extension = path.extension().string();
-		return extension == ".dll" || extension == ".so" || extension == ".dylib";
+		const auto relative = path.lexically_relative(boundary);
+		return !relative.empty() && !relative.is_absolute() && !relative.has_root_path()
+		    && std::ranges::none_of(relative, [](const auto& part) { return part == ".."; });
+	}
+
+	[[nodiscard]] std::optional<std::filesystem::path> canonical_existing(
+	    const std::filesystem::path& path, ModCatalogResult& result, const std::string_view label)
+	{
+		std::error_code error;
+		const auto canonical = std::filesystem::canonical(path, error);
+		if (error)
+		{
+			result.errors.push_back({path, std::string("cannot canonicalize ") + std::string(label) + ": " + error.message()});
+			return std::nullopt;
+		}
+		return canonical;
+	}
+
+	[[nodiscard]] std::optional<std::filesystem::path> canonical_descendant(const std::filesystem::path& path,
+	    const std::filesystem::path& boundary, ModCatalogResult& result, const std::string_view label)
+	{
+		const auto canonical = canonical_existing(path, result, label);
+		if (!canonical)
+			return std::nullopt;
+		if (!is_contained(*canonical, boundary) || *canonical == boundary)
+		{
+			result.errors.push_back({path, std::string(label) + " resolves outside its catalog boundary"});
+			return std::nullopt;
+		}
+		return canonical;
 	}
 
 	[[nodiscard]] bool safe_relative_entry(const std::filesystem::path& entry)
 	{
-		if (entry.empty() || entry.is_absolute() || entry.has_root_path())
-			return false;
-		return std::ranges::none_of(entry, [](const auto& part) { return part == ".."; });
+		return !entry.empty() && !entry.is_absolute() && !entry.has_root_path()
+		    && std::ranges::none_of(entry, [](const auto& part) { return part == ".."; });
 	}
 
-	[[nodiscard]] std::optional<std::filesystem::path> select_native_entry(const std::filesystem::path& root,
+	[[nodiscard]] bool is_native_library(const std::filesystem::path& path)
+	{
+		const auto extension = path.extension().string();
+		return std::ranges::contains(kNativeModExtensions, extension);
+	}
+
+	[[nodiscard]] NativeSelection select_native_entry(const std::filesystem::path& root,
 	    const std::optional<std::filesystem::path>& entry, const config::ModLoadPhase load_phase,
 	    ModCatalogResult& result)
 	{
-		const auto native_root = root / "native";
+		const auto native_path = root / mod_kind_folder_name(ModKind::Native);
+		std::error_code error;
+		const bool has_native = std::filesystem::is_directory(native_path, error);
+		if (error && !is_missing(error))
+		{
+			result.errors.push_back({native_path, "cannot inspect native directory: " + error.message()});
+			return {.valid = false};
+		}
+		if (!has_native)
+		{
+			if (entry || load_phase == config::ModLoadPhase::GlobalInit)
+				result.errors.push_back({root / "mod.toml", "selected native directory is missing"});
+			return {.valid = !entry && load_phase != config::ModLoadPhase::GlobalInit};
+		}
+
+		const auto native_root = canonical_descendant(native_path, root, result, "native directory");
+		if (!native_root)
+			return {.valid = false};
+
 		if (entry)
 		{
 			if (!safe_relative_entry(*entry))
 			{
 				result.errors.push_back({root / "mod.toml", "runtime.entry must stay under the native directory"});
-				return std::nullopt;
+				return {.valid = false};
 			}
-
-			const auto selected = native_root / *entry;
-			std::error_code error;
+			const auto selected = *native_root / *entry;
 			if (!std::filesystem::is_regular_file(selected, error) || error || !is_native_library(selected))
 			{
 				result.errors.push_back({root / "mod.toml", "runtime.entry does not select a native library"});
-				return std::nullopt;
+				return {.valid = false};
 			}
-
-			const auto canonical = canonical_path(selected);
-			const auto relative = canonical.lexically_relative(canonical_path(native_root));
-			if (!safe_relative_entry(relative))
-			{
-				result.errors.push_back({root / "mod.toml", "runtime.entry resolves outside the native directory"});
-				return std::nullopt;
-			}
-			return canonical;
-		}
-
-		std::error_code error;
-		if (!std::filesystem::is_directory(native_root, error) || error)
-		{
-			if (load_phase == config::ModLoadPhase::GlobalInit)
-				result.errors.push_back({root / "mod.toml", "global_init native directory is missing"});
-			return std::nullopt;
+			const auto canonical = canonical_descendant(selected, *native_root, result, "native entry");
+			return canonical ? NativeSelection{*canonical, true} : NativeSelection{.valid = false};
 		}
 
 		std::vector<std::filesystem::path> candidates;
-		std::filesystem::directory_iterator it(native_root, error);
+		std::filesystem::directory_iterator it(*native_root, error);
 		const std::filesystem::directory_iterator end;
 		for (; !error && it != end; it.increment(error))
 		{
 			std::error_code entry_error;
-			if (it->is_regular_file(entry_error) && !entry_error && is_native_library(it->path()))
-				candidates.push_back(canonical_path(it->path()));
+			if (!it->is_regular_file(entry_error) || entry_error || !is_native_library(it->path()))
+				continue;
+			const auto canonical = canonical_descendant(it->path(), *native_root, result, "native candidate");
+			if (!canonical)
+				return {.valid = false};
+			candidates.push_back(*canonical);
 		}
 		if (error)
 		{
-			result.errors.push_back({native_root, "cannot enumerate native directory: " + error.message()});
-			return std::nullopt;
+			result.errors.push_back({*native_root, "cannot enumerate native directory: " + error.message()});
+			return {.valid = false};
 		}
-
-		if (candidates.empty())
-			return std::nullopt;
-		if (candidates.size() != 1)
+		if (candidates.size() > 1)
 		{
-			result.errors.push_back({native_root, "multiple native libraries require runtime.entry"});
+			result.errors.push_back({*native_root, "multiple native libraries require runtime.entry"});
+			return {.valid = false};
+		}
+		return {candidates.empty() ? std::nullopt : std::optional{candidates.front()}, true};
+	}
+
+	[[nodiscard]] std::optional<std::vector<std::filesystem::path>> collect_dotnet_entries(
+	    const std::filesystem::path& root, ModCatalogResult& result)
+	{
+		const auto dotnet_path = root / mod_kind_folder_name(ModKind::Dotnet);
+		std::error_code error;
+		const bool has_dotnet = std::filesystem::is_directory(dotnet_path, error);
+		if (error && !is_missing(error))
+		{
+			result.errors.push_back({dotnet_path, "cannot inspect dotnet directory: " + error.message()});
 			return std::nullopt;
 		}
-		return std::move(candidates.front());
+		if (!has_dotnet)
+			return std::vector<std::filesystem::path>{};
+
+		const auto dotnet_root = canonical_descendant(dotnet_path, root, result, "dotnet directory");
+		if (!dotnet_root)
+			return std::nullopt;
+		std::vector<std::filesystem::path> entries;
+		std::filesystem::directory_iterator it(*dotnet_root, error);
+		const std::filesystem::directory_iterator end;
+		for (; !error && it != end; it.increment(error))
+		{
+			std::error_code entry_error;
+			if (!it->is_regular_file(entry_error) || entry_error || it->path().extension() != ".dll")
+				continue;
+			const auto canonical = canonical_descendant(it->path(), *dotnet_root, result, "dotnet entry");
+			if (!canonical)
+				return std::nullopt;
+			entries.push_back(*canonical);
+		}
+		if (error)
+		{
+			result.errors.push_back({*dotnet_root, "cannot enumerate dotnet directory: " + error.message()});
+			return std::nullopt;
+		}
+		std::ranges::sort(entries, {}, [](const auto& path) { return path.generic_string(); });
+		return entries;
 	}
 
 	[[nodiscard]] const PolicyOverride* matching_policy(const std::vector<PolicyOverride>& policies,
@@ -323,28 +393,29 @@ namespace
 		    [static_name](const PolicyOverride& policy) { return !policy.id && policy.name && *policy.name == *static_name; });
 		return legacy_match == policies.end() ? nullptr : &*legacy_match;
 	}
-
-	[[nodiscard]] std::string path_sort_key(const std::filesystem::path& path)
-	{
-		return path.generic_string();
-	}
 } // namespace
 
-	ModCatalogResult discover_native_mods(const std::filesystem::path& loader_root)
+	ModCatalogResult discover_mods(const std::filesystem::path& loader_root)
 	{
 		ModCatalogResult result;
-		const auto policies = load_policies(loader_root, result);
-		const auto mods_root = loader_root / "mods";
+		const auto canonical_loader = canonical_existing(loader_root, result, "loader root");
+		if (!canonical_loader)
+			return result;
+		const auto policies = load_policies(*canonical_loader, result);
 
+		const auto mods_path = *canonical_loader / "mods";
 		std::error_code error;
-		if (!std::filesystem::is_directory(mods_root, error))
+		if (!std::filesystem::is_directory(mods_path, error))
 		{
-			if (error)
-				result.errors.push_back({mods_root, "cannot inspect mods directory: " + error.message()});
+			if (error && !is_missing(error))
+				result.errors.push_back({mods_path, "cannot inspect mods directory: " + error.message()});
 			return result;
 		}
+		const auto mods_root = canonical_descendant(mods_path, *canonical_loader, result, "mods directory");
+		if (!mods_root)
+			return result;
 
-		std::filesystem::directory_iterator it(mods_root, error);
+		std::filesystem::directory_iterator it(*mods_root, error);
 		const std::filesystem::directory_iterator end;
 		for (; !error && it != end; it.increment(error))
 		{
@@ -353,8 +424,10 @@ namespace
 				continue;
 
 			const auto folder_id = it->path().filename().string();
-			const auto root = canonical_path(it->path());
-			const auto manifest_path = root / "mod.toml";
+			const auto root = canonical_descendant(it->path(), *mods_root, result, "mod root");
+			if (!root)
+				continue;
+			const auto manifest_path = *root / "mod.toml";
 			const bool has_manifest = std::filesystem::is_regular_file(manifest_path, entry_error) && !entry_error;
 
 			ManifestData manifest;
@@ -368,6 +441,8 @@ namespace
 
 			const auto policy = matching_policy(policies, folder_id,
 			    manifest.has_static_identity ? std::optional<std::string_view>{manifest.name} : std::nullopt);
+			if (policy && !policy->valid)
+				continue;
 			if (policy)
 			{
 				if (policy->enabled)
@@ -378,35 +453,25 @@ namespace
 					manifest.runtime.priority = *policy->priority;
 			}
 
-			const auto error_count = result.errors.size();
-			const auto dll = select_native_entry(root, manifest.entry, manifest.runtime.load_phase, result);
-			if (result.errors.size() != error_count)
+			const auto native = select_native_entry(*root, manifest.entry, manifest.runtime.load_phase, result);
+			if (!native.valid)
+				continue;
+			const auto dotnet = collect_dotnet_entries(*root, result);
+			if (!dotnet)
 				continue;
 
-			const auto name = manifest.has_static_identity ? manifest.name : folder_id;
-			result.roots.push_back({folder_id, root, name, manifest.runtime.priority, manifest.runtime.enabled,
-			    manifest.runtime.auto_load});
-			if (dll)
-			{
-				result.native_mods.push_back({folder_id, root, *dll, name, manifest.runtime.priority,
-				    manifest.runtime.enabled, manifest.runtime.auto_load, manifest.runtime.load_phase});
-			}
+			result.mods.push_back({folder_id, *root, native.entry, *dotnet,
+			    manifest.has_static_identity ? manifest.name : folder_id, manifest.runtime.priority,
+			    manifest.runtime.enabled, manifest.runtime.auto_load, manifest.runtime.load_phase});
 		}
 		if (error)
-			result.errors.push_back({mods_root, "cannot enumerate mods directory: " + error.message()});
+			result.errors.push_back({*mods_root, "cannot enumerate mods directory: " + error.message()});
 
-		const auto root_less = [](const ModRootDefinition& lhs, const ModRootDefinition& rhs) {
+		std::ranges::sort(result.mods, [](const ModDefinition& lhs, const ModDefinition& rhs) {
 			if (lhs.priority != rhs.priority)
 				return lhs.priority > rhs.priority;
-			return path_sort_key(lhs.root) < path_sort_key(rhs.root);
-		};
-		const auto native_less = [](const NativeModDefinition& lhs, const NativeModDefinition& rhs) {
-			if (lhs.priority != rhs.priority)
-				return lhs.priority > rhs.priority;
-			return path_sort_key(lhs.dll) < path_sort_key(rhs.dll);
-		};
-		std::ranges::sort(result.roots, root_less);
-		std::ranges::sort(result.native_mods, native_less);
+			return lhs.root.generic_string() < rhs.root.generic_string();
+		});
 		return result;
 	}
 } // namespace rml

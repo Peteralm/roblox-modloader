@@ -29,41 +29,23 @@ namespace rml
 		                     mods_path.value() / mod_kind_folder_name(ModKind::Dotnet)),
 		    ModKind::Dotnet);
 
-		const auto catalog = discover_native_mods(mods_path->parent_path());
+		const auto catalog = discover_mods(mods_path->parent_path());
 		for (const auto& error : catalog.errors)
-		{
 			RML_ERROR("Skipping invalid mod metadata '{}': {}", error.source.string(), error.message);
-		}
-
-		for (const auto& mod : catalog.roots)
-		{
-			if (!mod.enabled || !mod.auto_load)
-			{
-				continue;
-			}
-
-			const auto native = std::ranges::find(catalog.native_mods, mod.folder_id, &NativeModDefinition::folder_id);
-			if (native != catalog.native_mods.end() && native->load_phase == config::ModLoadPhase::Normal)
-			{
-				if (const auto loaded = load(native->dll); !loaded)
-				{
-					RML_ERROR("Failed to load native mod '{}': {}", native->name, loaded.error());
-				}
-			}
-
-			const auto dotnet = load_directory(mod.root / mod_kind_folder_name(ModKind::Dotnet));
-			if (!dotnet)
-			{
-				switch (dotnet.error().type)
-				{
-				case ModManagerError::Type::DirectoryNotFound:
-				case ModManagerError::Type::NoLoaderFound: break;
-				default: RML_ERROR("Failed to load dotnet mod '{}': {}", mod.name, dotnet.error().message); break;
-				}
-			}
-		}
+		load_catalog(catalog);
 
 		return {};
+	}
+
+	void ModManager::load_catalog(const ModCatalogResult& catalog) const
+	{
+		const auto native = m_loaders.find(ModKind::Native);
+		const auto dotnet = m_loaders.find(ModKind::Dotnet);
+		const auto errors = load_catalog(catalog,
+		    native == m_loaders.end() ? nullptr : native->second.get(),
+		    dotnet == m_loaders.end() ? nullptr : dotnet->second.get());
+		for (const auto& error : errors)
+			RML_ERROR("{}", error);
 	}
 
 	void ModManager::shutdown()
