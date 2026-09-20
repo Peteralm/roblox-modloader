@@ -115,7 +115,11 @@ namespace rml::platform::windows
 		{
 			if (!descriptor)
 				return {};
-			const auto* value = static_cast<const std::byte*>(descriptor) + 8;
+			// Descriptor stores `const Name& name` at +8; the Name object begins with its std::string.
+			const auto* value = *reinterpret_cast<const std::byte* const*>(
+			    static_cast<const std::byte*>(descriptor) + 8);
+			if (!value)
+				return {};
 			const auto size = *reinterpret_cast<const std::size_t*>(value + 16);
 			const auto capacity = *reinterpret_cast<const std::size_t*>(value + 24);
 			if (size > capacity || size > 4096)
