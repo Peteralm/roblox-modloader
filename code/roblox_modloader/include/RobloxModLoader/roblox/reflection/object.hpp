@@ -61,7 +61,7 @@ namespace RBX::Reflection
 			PLAYER_REPLICATE = 2,
 		};
 
-		typedef Vector<ClassDescriptor*> ClassDescriptors;
+		typedef std::vector<ClassDescriptor*> ClassDescriptors;
 
 		using PropertyDescriptors = MemberDescriptorContainer<PropertyDescriptor>::DescriptorView;
 		using FunctionDescriptors = MemberDescriptorContainer<FunctionDescriptor>::DescriptorView;
@@ -303,13 +303,13 @@ namespace RBX::Reflection
 		}
 
 		template<class T>
-		MemberDescriptorContainer<T>::Collection::const_iterator begin() const
+		MemberDescriptorContainer<T>::ConstIterator begin() const
 		{
 			return MemberDescriptorContainer<T>::descriptors_begin();
 		}
 
 		template<class T>
-		MemberDescriptorContainer<T>::Collection::const_iterator end() const
+		MemberDescriptorContainer<T>::ConstIterator end() const
 		{
 			return MemberDescriptorContainer<T>::descriptors_end();
 		}

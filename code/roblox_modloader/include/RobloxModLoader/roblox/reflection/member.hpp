@@ -1,62 +1,17 @@
 #pragma once
 
+#include "RobloxModLoader/roblox/reflection/array_view.hpp"
 #include "RobloxModLoader/roblox/security/script_permissions.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 #include "descriptor.hpp"
 
+#include <cstring>
 #include <string_view>
-#include <unordered_map>
+#include <vector>
 
 namespace RBX::Reflection
 {
 	class ClassDescriptor;
-
-	template<typename T>
-	struct Vector
-	{
-		using value_type = T;
-		using iterator = T*;
-		using const_iterator = T*;
-
-		T* m_data;
-		std::size_t m_size;
-		std::size_t m_capacity;
-
-		[[nodiscard]] std::size_t size() const noexcept
-		{
-			return m_size;
-		}
-		[[nodiscard]] std::size_t capacity() const noexcept
-		{
-			return m_capacity;
-		}
-		[[nodiscard]] bool empty() const noexcept
-		{
-			return m_size == 0;
-		}
-		[[nodiscard]] T* data() const noexcept
-		{
-			return m_data;
-		}
-
-		[[nodiscard]] T* begin() const noexcept
-		{
-			return m_data;
-		}
-		[[nodiscard]] T* end() const noexcept
-		{
-			return m_data + m_size;
-		}
-
-		T& operator[](std::size_t i) const noexcept
-		{
-			return m_data[i];
-		}
-		[[nodiscard]] T& at(std::size_t i) const noexcept
-		{
-			return m_data[i];
-		}
-	};
 
 	struct StringHashPredicate
 	{
@@ -75,16 +30,16 @@ namespace RBX::Reflection
 	class MemberDescriptorContainer
 	{
 	public:
-		struct CollectionEntry
+		struct Entry
 		{
 			MemberDescriptorType* descriptor;
-			uint64_t unk;
+			std::uint32_t kind;
+			std::uint32_t reserved_c;
 		};
-		using Collection = Vector<CollectionEntry>;
 
 		struct ConstIterator
 		{
-			const CollectionEntry* ptr;
+			const Entry* ptr;
 
 			MemberDescriptorType* operator*() const noexcept
 			{
@@ -123,26 +78,17 @@ namespace RBX::Reflection
 			}
 		};
 
-	private:
-		using ResolvedLookup = std::unordered_map<std::string_view, MemberDescriptorType*>;
-
-	public:
-		Collection descriptors;
-		const CollectionEntry* finalized_data;
+		std::vector<RBX::ArrayView<const MemberDescriptorType*>> views;
+		const Entry* finalized_data;
 		std::size_t finalized_size;
 		std::uint64_t total;
 		MemberDescriptorContainer* base_container;
 #if defined(RML_WINDOWS)
-		Collection finalize_scratch;
+		std::vector<RBX::ArrayView<const MemberDescriptorType*>> finalize_scratch;
 #endif
 		void* owner;
 		std::uint8_t finalized;
-		std::byte reserved_tail[7];
-
-		const Collection& get_descriptors() const
-		{
-			return descriptors;
-		}
+		std::byte reserved_41[7];
 
 		DescriptorView get_descriptor_view() const noexcept
 		{
@@ -151,25 +97,39 @@ namespace RBX::Reflection
 
 		ConstIterator descriptors_begin() const noexcept
 		{
-			return {descriptors.begin()};
+			return {finalized ? finalized_data : nullptr};
 		}
 		ConstIterator descriptors_end() const noexcept
 		{
-			return {descriptors.end()};
+			return {finalized ? finalized_data + finalized_size : nullptr};
 		}
 
 		std::size_t descriptor_size() const
 		{
-			return descriptors.size();
+			return finalized ? finalized_size : 0;
 		}
 
 		MemberDescriptorType* find_descriptor(const char* name) const
 		{
-			for (const CollectionEntry& entry : descriptors)
+			if (finalized)
 			{
-				if (entry.descriptor && entry.descriptor->name == name)
+				for (auto* descriptor : get_descriptor_view())
 				{
-					return entry.descriptor;
+					if (descriptor && descriptor->name == name)
+						return descriptor;
+				}
+				return nullptr;
+			}
+
+			for (const auto* container = this; container; container = container->base_container)
+			{
+				for (const auto& view : container->views)
+				{
+					for (const auto* descriptor : view)
+					{
+						if (descriptor && descriptor->name == name)
+							return const_cast<MemberDescriptorType*>(descriptor);
+					}
 				}
 			}
 			return nullptr;
@@ -193,8 +153,9 @@ namespace RBX::Reflection
 		}
 	};
 
-		RML_LAYOUT_DIAGNOSTIC_PUSH()
-		RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, finalized_data, 0x18);
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(MemberDescriptorContainer<ClassDescriptor>::Entry, 0x10);
+	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, finalized_data, 0x18);
 	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, total, 0x28);
 	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, base_container, 0x30);
 #if defined(RML_WINDOWS)
@@ -206,7 +167,7 @@ namespace RBX::Reflection
 	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, owner, 0x38);
 	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, finalized, 0x40);
 #endif
-		RML_LAYOUT_DIAGNOSTIC_POP()
+	RML_LAYOUT_DIAGNOSTIC_POP()
 
 		class MemberDescriptor : public Descriptor
 	{
