@@ -41,6 +41,8 @@ namespace rml
 
 			void enable_hook_if_hooking_is_already_running() const;
 
+			static void register_helper(const DetourHookHelper& helper);
+
 			template<auto detour_function>
 			struct hook_to_detour_hook_helper
 			{
@@ -56,9 +58,7 @@ namespace rml
 				DetourHookHelper d{};
 				d.m_detour_hook = &hook_to_detour_hook_helper<detour_function>::m_detour_hook;
 
-				d.enable_hook_if_hooking_is_already_running();
-
-				m_detour_hook_helpers.push_back(d);
+				register_helper(d);
 			}
 
 			template<auto detour_function>
@@ -70,9 +70,7 @@ namespace rml
 				d.m_detour_hook = &hook_to_detour_hook_helper<detour_function>::m_detour_hook;
 				d.m_on_hooking_available = on_hooking_available;
 
-				d.enable_hook_if_hooking_is_already_running();
-
-				m_detour_hook_helpers.push_back(d);
+				register_helper(d);
 
 				return nullptr;
 			}

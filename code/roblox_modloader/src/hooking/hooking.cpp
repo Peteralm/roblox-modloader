@@ -117,6 +117,12 @@ namespace rml
 	{
 	}
 
+	void Hooking::DetourHookHelper::register_helper(const DetourHookHelper& helper)
+	{
+		helper.enable_hook_if_hooking_is_already_running();
+		m_detour_hook_helpers.push_back(helper);
+	}
+
 	void Hooking::DetourHookHelper::enable_hook_if_hooking_is_already_running() const
 	{
 		if (g_hooking && g_hooking->m_enabled)
