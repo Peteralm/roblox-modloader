@@ -45,10 +45,6 @@ namespace rml
 				detour_hook_helper.m_detour_hook->set_target_and_create_hook(detour_hook_helper.m_on_hooking_available());
 		}
 
-		//detour_hook_helper::add<hooks::rbx_crash>("RBX_CRASH", g_pointers->m_roblox_pointers.m_rbx_crash);
-		// detour_hook_helper::add<hooks::render_prepare>("RENDER_PREPARE", g_pointers->m_roblox_pointers.m_render_prepare);
-		// detour_hook_helper::add<hooks::render_perform>("RENDER_PERFORM", g_pointers->m_roblox_pointers.m_render_perform);
-		// detour_hook_helper::add<hooks::render_view>("RENDER_VIEW", g_pointers->m_roblox_pointers.m_render_view);
 #if RML_ENABLE_LUAU
 		DetourHookHelper::add<Hooks::luau_load>("LUAU_LOAD", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.luau_load));
 #endif
@@ -56,6 +52,12 @@ namespace rml
 
 		if (g_pointers->m_roblox_pointers.creatable_get_creator)
 			DetourHookHelper::add<Hooks::creatable_get_creator>("CREATABLE_GET_CREATOR", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.creatable_get_creator));
+
+		if (g_pointers->m_roblox_pointers.visual_engine_begin_render)
+			DetourHookHelper::add<Hooks::visual_engine_begin_render>("VISUAL_ENGINE_BEGIN_RENDER", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.visual_engine_begin_render));
+
+		if (g_pointers->m_roblox_pointers.scene_manager_render_scene)
+			DetourHookHelper::add<Hooks::scene_manager_render_scene>("SCENE_MANAGER_RENDER_SCENE", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.scene_manager_render_scene));
 
 		g_hooking = this;
 	}

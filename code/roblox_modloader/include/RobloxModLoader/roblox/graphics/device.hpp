@@ -43,9 +43,10 @@ namespace RBX::Graphics
 		virtual std::shared_ptr<ShaderProgram> create_shader_program(const std::shared_ptr<Shader>* shaders, std::size_t count, const std::string& name) = 0;
 		virtual std::shared_ptr<Buffer> create_buffer(Buffer::Type type, unsigned size, unsigned element_size, Buffer::Usage usage, const std::string& name) = 0;
 		virtual const DeviceCaps& get_caps() const = 0;
+		virtual void unmapped_28() = 0;
 		virtual void get_statistics_unmapped() const = 0;
 		virtual void set_frame_timing_details_unmapped(std::uint64_t details) = 0;
-		virtual void consume_drawable_wait_stats() = 0;
+		virtual void consume_drawable_wait_stats_unmapped() = 0;
 		virtual void suspend() = 0;
 		virtual void resume() = 0;
 		virtual void set_thread_context() = 0;

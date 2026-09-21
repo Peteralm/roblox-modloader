@@ -53,6 +53,20 @@ namespace rml
 				},
 			},
 			{
+				"VISUAL_ENGINE_BEGIN_RENDER",
+				"F4 4F BE A9 FD 7B 01 A9 FD 43 00 91 F3 03 00 AA ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? 14 01 09 0A",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.visual_engine_begin_render = ptr.as<functions::visual_engine_begin_render>();
+				},
+			},
+			{
+				"SCENE_MANAGER_RENDER_SCENE",
+				"FF 43 06 D1 E9 23 12 6D FC 6F 13 A9 FA 67 14 A9 F8 5F 15 A9 F6 57 16 A9 F4 4F 17 A9 FD 7B 18 A9 FD 03 06 91 F4 03 06 AA F5 03 05 AA F6 03 04 AA F7 03 03 AA",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.scene_manager_render_scene = ptr.as<functions::scene_manager_render_scene>();
+				},
+			},
+			{
 				"PROPERTY_DESCRIPTOR_CTOR",
 				"F6 57 BD A9 F4 4F 01 A9 FD 7B 02 A9 FD 83 00 91 F4 03 07 AA F3 03 05 AA",
 				[](const memory::handle ptr) {

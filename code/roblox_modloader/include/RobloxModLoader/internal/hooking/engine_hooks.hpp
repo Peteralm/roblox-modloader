@@ -1,8 +1,7 @@
 #pragma once
 
-#include "RobloxModLoader/roblox/adorn_render.hpp"
 #include "RobloxModLoader/roblox/job.hpp"
-#include "RobloxModLoader/roblox/render_view.hpp"
+#include "RobloxModLoader/roblox/reflection/array_view.hpp"
 #include "RobloxModLoader/roblox/task_scheduler.hpp"
 
 #include <cstdint>
@@ -13,6 +12,13 @@ namespace RBX
 	class TaskSchedulerJob;
 	class ICreator;
 	class Name;
+
+	namespace Graphics
+	{
+		class DeviceContext;
+		class Framebuffer;
+		class VisualEngine;
+	}
 }
 
 namespace rml
@@ -22,11 +28,6 @@ namespace rml
 		static void rbx_crash(const char* type, const char* message);
 		static uint64_t* on_authentication(uint64_t* _this, uint64_t doc_panel_provider, uint64_t q_image_provider);
 		static std::uintptr_t* build_summary(uintptr_t* _this, std::uintptr_t* out);
-		static void render_pass_2d(uintptr_t* _this, AdornRender* adorn, uintptr_t* graphics_metric);
-		static void render_pass_3d(uintptr_t* _this, AdornRender* adorn);
-		static void render_prepare(RenderView* this_ptr, uintptr_t metric, bool updateViewport);
-		static void render_perform(RenderView* this_ptr, double timeJobStart, uintptr_t* frame_buffer, uintptr_t a4);
-		static void render_view(uintptr_t* scene_manager, uintptr_t* context, uintptr_t* mainFrameBuffer, uintptr_t* camera, uintptr_t* a5, unsigned int viewWidth, unsigned int viewHeight);
 		static RBX::TaskScheduler::StepResult on_job_step(void** this_ptr, const RBX::Stats& time_metrics);
 		static void on_job_destroy(void** this_ptr);
 		static void resume_waiting_scripts(uintptr_t* script_context, int expiration_time);
@@ -37,5 +38,7 @@ namespace rml
 		static void qt_action_activate(void* self, int event);
 		static void global_init();
 		static const RBX::ICreator* creatable_get_creator(const RBX::Name* name);
+		static RBX::Graphics::DeviceContext* visual_engine_begin_render(RBX::Graphics::VisualEngine* self);
+		static void scene_manager_render_scene(void* self, RBX::Graphics::DeviceContext* context, RBX::Graphics::Framebuffer* target, const void* camera, RBX::ArrayView<RBX::Graphics::Framebuffer*> extra, std::uint32_t capture_mode);
 	};
 }

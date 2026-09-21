@@ -27,7 +27,7 @@ TEST_CASE("graphics interfaces are pure and keep the dumped slot order")
 	const BlendState blend{};
 	const DepthState depth{};
 	CHECK(rml::vtable_index_of(&Device::create_shader, Shader::Type::Vertex, bytecode, name) == 24);
-	CHECK(rml::vtable_index_of(&Device::create_texture_impl, Texture::Type::Type_2D, Texture::Format::RGBA8, 0u, 0u, 0u, 0u, 0u, 0u, Texture::Usage::Static, name) == 48);
+	CHECK(rml::vtable_index_of(&Device::create_texture_impl, Texture::Type::Type_2D, Texture::Format::RGBA8, 0u, 0u, 0u, 0u, 0u, 0u, Texture::Usage::Static, name) == 49);
 	CHECK(rml::vtable_index_of(&DeviceContext::set_render_state, rasterizer, blend, depth) == 26);
 	CHECK(rml::vtable_index_of(&DeviceContext::end_sync_profiler_scope_unmapped, std::uint64_t{}, nullptr, nullptr) == 39);
 	CHECK(rml::vtable_index_of(&Texture::reduce_mip_levels, 0u) == 13);
