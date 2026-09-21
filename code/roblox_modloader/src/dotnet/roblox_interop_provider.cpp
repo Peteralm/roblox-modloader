@@ -2,6 +2,8 @@
 #include "RobloxModLoader/memory/foreign_call.hpp"
 #include "roblox_interop_provider.hpp"
 
+#include "pointers.hpp"
+
 #include "RobloxModLoader/logger/logger.hpp"
 #include "RobloxModLoader/roblox/data_model.hpp"
 #include "RobloxModLoader/roblox/reflection/function_descriptor.hpp"
@@ -340,7 +342,7 @@ namespace rml::dotnet
 
 				auto holder = std::make_unique<ManagedEventConnection>();
 				holder->slot = slot;
-				holder->connection = event_descriptor->connect(instance, slot);
+				holder->connection = event_descriptor->connect_generic(instance, slot);
 
 				return reinterpret_cast<uintptr_t>(holder.release());
 			}
@@ -517,7 +519,7 @@ namespace rml::dotnet
 					return;
 
 				auto event_args = build_event_fire_args(descriptor, args, arg_count);
-				descriptor->fire_event(instance, event_args);
+				descriptor->fire_event_generic(instance, event_args);
 				release_fire_args(event_args);
 			}
 			catch (const std::exception& e)

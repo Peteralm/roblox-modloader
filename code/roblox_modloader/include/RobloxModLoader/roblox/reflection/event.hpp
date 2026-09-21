@@ -1,6 +1,8 @@
 #pragma once
 #include "type.hpp"
 
+#include "RobloxModLoader/internal/engine_abi.hpp"
+
 #include <vector>
 
 struct lua_State;
@@ -65,19 +67,37 @@ namespace RBX::Reflection
 
 	class EventSource
 	{
+	protected:
+		EventSource() = default;
+
 	public:
 		virtual ~EventSource() = default;
 
-		virtual void* get_object_cookie() = 0;
+		virtual void* get_object_cookie()
+		{
+			rml::engine_virtual_unreachable();
+		}
 
 		virtual void process_remote_event(const EventDescriptor& descriptor, const EventArguments& args,
-		    const SystemAddress& source) = 0;
+		    const SystemAddress& source)
+		{
+			rml::engine_virtual_unreachable();
+		}
 
 		virtual void raise_event_invocation(const EventDescriptor& descriptor, const EventArguments& args,
-		    const RemoteEventInvocationTargetOptions& options) = 0;
+		    const RemoteEventInvocationTargetOptions& options)
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual bool use_submit_task_for_lua_listeners() const = 0;
+		virtual bool use_submit_task_for_lua_listeners() const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual void on_connected_to_change_signal_from_lua(const RBX::Lua::EventInstance& event, lua_State* state) = 0;
+		virtual void on_connected_to_change_signal_from_lua(const RBX::Lua::EventInstance& event, lua_State* state)
+		{
+			rml::engine_virtual_unreachable();
+		}
 	};
 }

@@ -10,8 +10,8 @@ namespace RBX::Signals
 {
 	struct Slot
 	{
-		i32 strong;
-		i32 weak;
+		std::int32_t strong;
+		std::int32_t weak;
 		void* fire_fn;
 		Slot* next;
 		std::uint64_t flags;
@@ -37,8 +37,8 @@ namespace RBX::Signals
 
 	struct Signal
 	{
-		i32 strong;
-		i32 weak;
+		std::int32_t strong;
+		std::int32_t weak;
 		Slot* head;
 
 	private:

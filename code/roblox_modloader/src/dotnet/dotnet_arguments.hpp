@@ -2,6 +2,7 @@
 #include "RobloxModLoader/roblox/instance.hpp"
 #include "RobloxModLoader/roblox/reflection/function_descriptor.hpp"
 #include "RobloxModLoader/roblox/reflection/type.hpp"
+#include "RobloxModLoader/roblox/util/G3DCore.h"
 #include "RobloxModLoader/util/layout_assert.hpp"
 #include "dotnet_variant.hpp"
 #include "interop_registry.hpp"

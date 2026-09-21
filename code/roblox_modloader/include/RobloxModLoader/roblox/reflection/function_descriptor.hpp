@@ -1,16 +1,23 @@
 #pragma once
 
 #include "RobloxModLoader/memory/foreign_call.hpp"
-#include "RobloxModLoader/roblox/util/G3DCore.h"
 #include "RobloxModLoader/util/layout_assert.hpp"
 #include "enum_descriptor.hpp"
 #include "member.hpp"
 #include "type.hpp"
 
+#include <cstdint>
 #include <cstring>
 #include <utility>
 
 class Function;
+
+namespace G3D
+{
+	class Vector3;
+	class Vector3int16;
+	class Rect2D;
+}
 
 namespace RBX::Reflection
 {
@@ -34,11 +41,11 @@ namespace RBX::Reflection
 			virtual bool get_long(int index, long& value) const = 0;
 			virtual bool get_double(int index, double& value) const = 0;
 			virtual bool get_string(int index, std::string& value) const = 0;
-			virtual bool get_vector3_int16(int index, Vector3int16& value) const = 0;
+			virtual bool get_vector3_int16(int index, G3D::Vector3int16& value) const = 0;
 			virtual bool get_region3_int16(int index, void* value) const = 0;
-			virtual bool get_vector3(int index, Vector3& value) const = 0;
+			virtual bool get_vector3(int index, G3D::Vector3& value) const = 0;
 			virtual bool get_region3(int index, void* value) const = 0;
-			virtual bool get_rect(int index, Rect2D& value) const = 0;
+			virtual bool get_rect(int index, G3D::Rect2D& value) const = 0;
 			virtual bool get_object(int index, std::shared_ptr<DescribedBase>& value) const = 0;
 			virtual bool get_enum(int index, const EnumDescriptor& desc, int& value) const = 0;
 
@@ -52,12 +59,8 @@ namespace RBX::Reflection
 			Custom = 1,
 		};
 
-		virtual int invoke_lua(DescribedBase* instance, lua_State*) const
-		{
-			return 0;
-		}
-
-		virtual uint64_t invoke(DescribedBase* instance, Arguments& arguments, std::intptr_t argument_base) const = 0;
+		virtual int execute_custom(DescribedBase* instance, lua_State* L) const = 0;
+		virtual int execute_lua(DescribedBase* instance, lua_State* L, int argument_base) const = 0;
 
 		[[nodiscard]] const SignatureDescriptor& get_signature() const noexcept
 		{
@@ -69,28 +72,35 @@ namespace RBX::Reflection
 			return kind;
 		}
 
+		SignatureDescriptor signature;
+		Kind kind;
+		std::uint32_t reserved_7c;
+	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(FunctionDescriptor, 0x80);
+	RML_ASSERT_OFFSET(FunctionDescriptor, signature, 0x48);
+	RML_ASSERT_OFFSET(FunctionDescriptor, kind, 0x78);
+	RML_LAYOUT_DIAGNOSTIC_POP()
+
+	class BoundFunctionDescriptor : public FunctionDescriptor
+	{
+	public:
 		template<typename T>
 		[[nodiscard]] T* native_func_ptr() const noexcept
 		{
 			return reinterpret_cast<T*>(invoke_func_ptr);
 		}
 
-		std::byte pad[0x8];
-		SignatureDescriptor signature;
-		Kind kind;
 		void* invoke_func_ptr;
 		std::intptr_t bound_this_delta;
-
-	private:
-		RML_LAYOUT_GUARD_BEGIN()
-		RML_ASSERT_LAYOUT_SIZE(FunctionDescriptor, 0x90);
-		RML_ASSERT_LAYOUT_OFFSET(FunctionDescriptor, pad, 0x40);
-		RML_ASSERT_LAYOUT_OFFSET(FunctionDescriptor, signature, 0x48);
-		RML_ASSERT_LAYOUT_OFFSET(FunctionDescriptor, kind, 0x78);
-		RML_ASSERT_LAYOUT_OFFSET(FunctionDescriptor, invoke_func_ptr, 0x80);
-		RML_ASSERT_LAYOUT_OFFSET(FunctionDescriptor, bound_this_delta, 0x88);
-		RML_LAYOUT_GUARD_END()
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(BoundFunctionDescriptor, 0x90);
+	RML_ASSERT_OFFSET(BoundFunctionDescriptor, invoke_func_ptr, 0x80);
+	RML_ASSERT_OFFSET(BoundFunctionDescriptor, bound_this_delta, 0x88);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 
 	class Function
 	{
@@ -111,12 +121,12 @@ namespace RBX::Reflection
 		[[nodiscard]] MemberPointer load_member_pointer() const noexcept
 		{
 			MemberPointer member{};
-			std::memcpy(&member, &m_descriptor->invoke_func_ptr, sizeof(member));
+			std::memcpy(&member, &static_cast<const BoundFunctionDescriptor*>(m_descriptor)->invoke_func_ptr, sizeof(member));
 			return member;
 		}
 
 		template<std::size_t... I>
-		u64 invoke_fixed(FunctionDescriptor::Arguments& arguments, const bool indirect_result, std::index_sequence<I...>) const
+		std::uint64_t invoke_fixed(FunctionDescriptor::Arguments& arguments, const bool indirect_result, std::index_sequence<I...>) const
 		{
 			auto* const self = reinterpret_cast<EngineCallable*>(m_instance);
 
@@ -124,7 +134,7 @@ namespace RBX::Reflection
 
 			if (!indirect_result)
 			{
-				using DirectMember = u64 (EngineCallable::*)(arg_slot<I>...);
+				using DirectMember = std::uint64_t (EngineCallable::*)(arg_slot<I>...);
 				return (self->*load_member_pointer<DirectMember>())(arguments.get(static_cast<int>(I) + 1)...);
 			}
 

@@ -28,6 +28,8 @@ namespace RBX::Reflection
 		const bool is_number;
 		const bool is_enum;
 
+		Type() = delete;
+
 		bool operator==(const Type& other) const noexcept
 		{
 			return this == &other;

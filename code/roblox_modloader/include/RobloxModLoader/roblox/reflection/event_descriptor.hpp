@@ -44,8 +44,7 @@ namespace RBX::Reflection
 		typedef Event ConstMember;
 		typedef Event Member;
 
-	protected:
-		char _unk_0x40[0x8];
+	public:
 		SignatureDescriptor signature;
 
 		bool operator==(const EventDescriptor& other) const
@@ -57,57 +56,43 @@ namespace RBX::Reflection
 			return this != &other;
 		}
 
-	public:
 		const SignatureDescriptor& get_signature() const
 		{
 			return signature;
 		}
 
-		virtual Signals::Connection connect(EventSource* source, std::shared_ptr<GenericSlotWrapper> wrapper) const = 0;
-
-		[[nodiscard]] virtual bool is_scriptable() const
-		{
-			return true;
-		}
 		[[nodiscard]] bool is_public() const
 		{
 			return is_scriptable();
 		}
 
-		[[nodiscard]] virtual bool isBroadcast() const
-		{
-			return false;
-		}
-		[[nodiscard]] virtual bool unk_0x40() const
-		{
-			return false;
-		}
-		[[nodiscard]] virtual bool unk_0x80() const
-		{
-			return false;
-		}
-		virtual void fire_event(EventSource* source, const EventArguments& args) const = 0;
-		virtual void send_event(EventSource* source, const EventArguments& args) const;
+		virtual Signals::Connection connect_generic(EventSource* source, std::shared_ptr<GenericSlotWrapper> wrapper) const = 0;
+		virtual bool is_scriptable() const = 0;
+		virtual bool is_broadcast() const = 0;
+		virtual int get_send_mode() const = 0;
+		virtual void* get_latched_signal(EventSource* source) const = 0;
+		virtual void fire_event_generic(EventSource* source, const EventArguments& args) const = 0;
+		virtual bool has_event_connections(EventSource* source) const = 0;
 		virtual void disconnect_all(EventSource* source) const = 0;
 
 		[[nodiscard]] Signals::Signal* get_signal(EventSource* source) const;
 		[[nodiscard]] std::vector<Signals::Connection> snapshot_connections(EventSource* source) const;
 
-	private:
-		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_SIZE(EventDescriptor, 0x78);
-			RML_ASSERT_LAYOUT_OFFSET(EventDescriptor, signature, 0x48);
-		RML_LAYOUT_GUARD_END()
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(EventDescriptor, 0x78);
+	RML_ASSERT_OFFSET(EventDescriptor, signature, 0x48);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 	
 	class EventDesc : public EventDescriptor
 	{
 	public:
 		std::int32_t signal;
 
-	private:
-		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_OFFSET(EventDesc, signal, 0x78);
-		RML_LAYOUT_GUARD_END()
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_OFFSET(EventDesc, signal, 0x78);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 }

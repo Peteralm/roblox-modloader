@@ -193,6 +193,7 @@ namespace RBX::Reflection
 		}
 	};
 
+		RML_LAYOUT_DIAGNOSTIC_PUSH()
 		RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, finalized_data, 0x18);
 	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, total, 0x28);
 	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, base_container, 0x30);
@@ -205,8 +206,9 @@ namespace RBX::Reflection
 	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, owner, 0x38);
 	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, finalized, 0x40);
 #endif
+		RML_LAYOUT_DIAGNOSTIC_POP()
 
-	class MemberDescriptor : public Descriptor
+		class MemberDescriptor : public Descriptor
 	{
 	public:
 		static void (*member_hiding_hook)(MemberDescriptor*, MemberDescriptor*);
@@ -214,14 +216,18 @@ namespace RBX::Reflection
 		const Name& category;
 		const ClassDescriptor& owner;
 		const Security::Permissions security;
+		std::uint64_t reserved_40;
+
+		MemberDescriptor() = delete;
 
 	protected:
 		virtual ~MemberDescriptor() = default;
-
-	private:
-		RML_LAYOUT_GUARD_BEGIN()
-		RML_ASSERT_LAYOUT_SIZE(MemberDescriptor, 0x40);
-		RML_ASSERT_LAYOUT_OFFSET(MemberDescriptor, security, 0x38);
-		RML_LAYOUT_GUARD_END()
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(MemberDescriptor, 0x48);
+	RML_ASSERT_OFFSET(MemberDescriptor, category, 0x28);
+	RML_ASSERT_OFFSET(MemberDescriptor, owner, 0x30);
+	RML_ASSERT_OFFSET(MemberDescriptor, security, 0x38);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 }

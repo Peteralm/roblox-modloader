@@ -2,6 +2,8 @@
 
 #include "RobloxModLoader/internal/platform.hpp"
 
+#include <cstdlib>
+
 #if defined(RML_WINDOWS)
 	#define RML_ENGINE_CALL __fastcall
 	#define RML_ENGINE_CLASS __declspec(empty_bases)
@@ -9,3 +11,11 @@
 	#define RML_ENGINE_CALL
 	#define RML_ENGINE_CLASS
 #endif
+
+namespace rml
+{
+	[[noreturn]] inline void engine_virtual_unreachable()
+	{
+		std::abort();
+	}
+}
