@@ -10,8 +10,8 @@
 
 <div align="center">
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/revolutionxk/roblox-modloader/build.yml?style=for-the-badge&branch=develop&logo=github&label=develop%20build)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/revolutionxk/roblox-modloader/build.yml?style=for-the-badge&branch=main&logo=github&label=main%20build)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/revolutionxk/roblox-modloader/nightly.yml?style=for-the-badge&branch=develop&logo=github&label=develop%20build)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/revolutionxk/roblox-modloader/release.yml?style=for-the-badge&branch=main&logo=github&label=main%20build)
 [![GitHub License](https://img.shields.io/github/license/revolutionxk/roblox-modloader?style=for-the-badge)](LICENSE)
 
 </div>
@@ -25,21 +25,11 @@
 > [!NOTE]
 > This project is still in development and may contain bugs or incomplete features.
 
-> [!WARNING]
-> Roblox changed (shuffled) the internal layout of Luau’s structs a few months ago, so the in-memory structures we
-> relied on no longer line up. Because of that I’m building a
-> static-analysis [dumper](https://github.com/revolutionxk/roblox-modloader/tree/develop/dumper) to reconstruct the
-> correct structs and offsets so scripting support can work again. Luau/internal scripting is temporarily disabled while
-> I
-> finish that—native C++/C# mods keep working normally. I’ll re-enable scripting once
-> the [dumper](https://github.com/revolutionxk/roblox-modloader/tree/develop/dumper) produces a stable, reliable
-> mapping.
-
 ## Cross-Platform Support
 
 - [x] Windows
 - [x] Linux Vinegar
-- [ ] macOS (planned)
+- [x] macOS
 
 ## Quick Start
 
@@ -78,7 +68,7 @@ The release archive is already laid out so a plain extract lands everything in t
         └── your-mod/
             ├── native/           native C++ mod DLLs
             ├── dotnet/           .NET mod assemblies
-            └── scripts/          Luau scripts (temporarily disabled)
+            └── scripts/          Luau scripts
 ```
 
 ## Writing a mod
