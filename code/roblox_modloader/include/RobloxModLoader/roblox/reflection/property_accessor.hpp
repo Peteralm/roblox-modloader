@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstdint>
+#include <new>
 #include <string>
+#include <utility>
 
 namespace rml::reflection
 {
@@ -44,6 +47,31 @@ namespace rml::reflection
 	struct property_type_of<std::string>
 	{
 		static constexpr PropertyType value = PropertyType::String;
+	};
+
+	template<typename T>
+	struct VariantOps
+	{
+		static void construct(const char* source, char* storage)
+		{
+			::new (storage) T(*reinterpret_cast<const T*>(source));
+		}
+
+		static void move_construct(char* source, char* storage)
+		{
+			::new (storage) T(std::move(*reinterpret_cast<T*>(source)));
+		}
+
+		static void destruct(char* storage)
+		{
+			reinterpret_cast<T*>(storage)->~T();
+		}
+
+		static inline const void* const table[3] = {
+		    reinterpret_cast<const void*>(&construct),
+		    reinterpret_cast<const void*>(&move_construct),
+		    reinterpret_cast<const void*>(&destruct),
+		};
 	};
 
 	template<typename T>

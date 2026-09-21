@@ -14,12 +14,14 @@ class ModThing final : public rml::reflection::DescribedCreatable<ModThing>
 public:
 	float speed{};
 	std::string label;
+	rbx::signal<void(float)> speed_reset;
 
 	int reset(lua_State* L)
 	{
 		const auto previous = speed;
 		speed = 0.f;
 		label = "reset";
+		fire(&ModThing::speed_reset, previous);
 		lua_pushnumber(L, previous);
 		return 1;
 	}
@@ -53,6 +55,7 @@ public:
 		    .property("Speed", &ModThing::speed)
 		    .property("Label", &ModThing::label)
 		    .function("Reset", &ModThing::reset)
+		    .event("SpeedReset", &ModThing::speed_reset, {"previous"})
 		    .commit();
 		g_log->info("ModThing registered ({} bytes)", sizeof(ModThing));
 	}

@@ -20,4 +20,10 @@ namespace RBX::Signals
 		if (g_pointers && g_pointers->m_roblox_pointers.signal_disconnect)
 			g_pointers->m_roblox_pointers.signal_disconnect(slot);
 	}
+
+	void release_holder(Signal* holder) noexcept
+	{
+		if (holder && g_pointers && g_pointers->m_roblox_pointers.slots_holder_release)
+			g_pointers->m_roblox_pointers.slots_holder_release(holder);
+	}
 }

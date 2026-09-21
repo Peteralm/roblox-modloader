@@ -4,10 +4,13 @@
 #include "RobloxModLoader/roblox/reflection/described_creatable.hpp"
 #include "RobloxModLoader/roblox/reflection/property_accessor.hpp"
 
+#include <cstddef>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 struct lua_State;
 
@@ -52,6 +55,12 @@ namespace rml::reflection
 		Method m_method;
 	};
 
+	struct EventArgument
+	{
+		PropertyType type;
+		std::string name;
+	};
+
 	class RML_EXPORT ClassBuilder
 	{
 	public:
@@ -62,6 +71,7 @@ namespace rml::reflection
 
 		ClassBuilder& property(std::string_view name, PropertyType type, std::shared_ptr<void> accessor, std::string_view category);
 		ClassBuilder& function(std::string_view name, std::shared_ptr<FunctionInvoker> invoker);
+		ClassBuilder& event(std::string_view name, std::ptrdiff_t member_offset, std::vector<EventArgument> arguments);
 		const RBX::Reflection::ClassDescriptor* commit();
 
 	private:
@@ -95,6 +105,20 @@ namespace rml::reflection
 		TypedClassBuilder& function(std::string_view name, int (Derived::*method)(lua_State*))
 		{
 			m_builder.function(name, std::make_shared<MethodInvoker<Derived>>(method));
+			return *this;
+		}
+
+		template<typename... Args>
+		TypedClassBuilder& event(std::string_view name, rbx::signal<void(Args...)> Derived::* member, std::initializer_list<std::string_view> argument_names = {})
+		{
+			std::vector<EventArgument> arguments{EventArgument{property_type_of<Args>::value, {}}...};
+			std::size_t index = 0;
+			for (const auto argument_name : argument_names)
+			{
+				if (index < arguments.size())
+					arguments[index++].name = argument_name;
+			}
+			m_builder.event(name, member_offset(member), std::move(arguments));
 			return *this;
 		}
 

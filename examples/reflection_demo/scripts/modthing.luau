@@ -19,7 +19,13 @@ local ok, result = pcall(function()
 	thing.Label = "hello"
 	table.insert(lines, "Speed=" .. tostring(thing.Speed))
 	table.insert(lines, "Label=" .. tostring(thing.Label))
+	local fired = "none"
+	local connection = thing.SpeedReset:Connect(function(value)
+		fired = tostring(value)
+	end)
 	local previous = thing:Reset()
+	table.insert(lines, "SpeedReset=" .. fired)
+	connection:Disconnect()
 	table.insert(lines, "Reset()=" .. tostring(previous))
 	table.insert(lines, "Speed after=" .. tostring(thing.Speed))
 	table.insert(lines, "Label after=" .. tostring(thing.Label))

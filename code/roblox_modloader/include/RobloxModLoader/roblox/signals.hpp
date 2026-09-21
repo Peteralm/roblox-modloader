@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RobloxModLoader/internal/engine_abi.hpp"
+#include "RobloxModLoader/rml_export.hpp"
 #include "RobloxModLoader/util/intrusive_weak_ptr.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 
@@ -105,4 +106,34 @@ namespace RBX::Signals
 	};
 
 	static_assert(sizeof(Connection) == sizeof(void*), "Connection must stay a single-pointer handle");
+
+	RML_EXPORT void release_holder(Signal* holder) noexcept;
+}
+
+namespace rbx
+{
+	template<typename Signature>
+	class signal
+	{
+	public:
+		RBX::Signals::Signal* holder{};
+
+		signal() = default;
+		signal(const signal&) = delete;
+		signal& operator=(const signal&) = delete;
+
+		~signal()
+		{
+			RBX::Signals::release_holder(holder);
+		}
+
+		[[nodiscard]] bool empty() const noexcept
+		{
+			return !holder || !holder->head;
+		}
+	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(signal<void()>, 8);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 }

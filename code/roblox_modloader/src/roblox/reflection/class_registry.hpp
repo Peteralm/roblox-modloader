@@ -30,6 +30,13 @@ namespace rml::reflection
 		std::shared_ptr<FunctionInvoker> invoker;
 	};
 
+	struct EventSpec
+	{
+		std::string name;
+		std::ptrdiff_t member_offset;
+		std::vector<EventArgument> arguments;
+	};
+
 	struct ClassSpec
 	{
 		std::string name;
@@ -37,6 +44,7 @@ namespace rml::reflection
 		ClassLayout layout;
 		std::vector<PropertySpec> properties;
 		std::vector<FunctionSpec> functions;
+		std::vector<EventSpec> events;
 	};
 
 	struct RegisteredClass;
@@ -77,6 +85,8 @@ namespace rml::reflection
 		std::vector<std::shared_ptr<FunctionInvoker>> invokers;
 		std::vector<const RBX::Reflection::PropertyDescriptor*> property_table;
 		std::vector<const RBX::Reflection::FunctionDescriptor*> function_table;
+		std::vector<const RBX::Reflection::EventDescriptor*> event_table;
+		std::unordered_map<std::ptrdiff_t, const RBX::Reflection::EventDescriptor*> events_by_offset;
 	};
 
 	class ClassRegistry

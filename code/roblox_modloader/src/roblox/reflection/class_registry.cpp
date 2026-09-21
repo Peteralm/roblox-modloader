@@ -185,11 +185,26 @@ namespace rml::reflection
 			entry.invokers.push_back(function.invoker);
 		}
 
+		for (const auto& event : spec.events)
+		{
+			auto member = make_event(entry.storage.get(), event.name, event.member_offset, event.arguments);
+			if (!member)
+			{
+				m_classes.pop_back();
+				return std::unexpected(member.error());
+			}
+
+			const auto* descriptor = reinterpret_cast<const RBX::Reflection::EventDescriptor*>(member->storage.get());
+			entry.event_table.push_back(descriptor);
+			entry.events_by_offset[event.member_offset] = descriptor;
+			entry.member_storage.push_back(std::move(member->storage));
+		}
+
 		static ClassAttributes attributes;
 		const auto& p = g_pointers->m_roblox_pointers;
 		p.class_descriptor_ctor(entry.storage.get(), base, entry.name.c_str(), 0, 0, false, false, &attributes, k_protection_none, nullptr,
 		    RBX::ArrayView<const RBX::Reflection::PropertyDescriptor*>{entry.property_table},
-		    RBX::ArrayView<const RBX::Reflection::EventDescriptor*>{},
+		    RBX::ArrayView<const RBX::Reflection::EventDescriptor*>{entry.event_table},
 		    RBX::ArrayView<const RBX::Reflection::FunctionDescriptor*>{entry.function_table},
 		    RBX::ArrayView<const RBX::Reflection::YieldFunctionDescriptor*>{},
 		    RBX::ArrayView<const RBX::Reflection::CallbackDescriptor*>{});
@@ -199,8 +214,8 @@ namespace rml::reflection
 		m_creators[&entry.descriptor->name] = entry.creator.get();
 		m_by_descriptor[entry.descriptor] = &entry;
 
-		RML_INFO("Registered class {} : {} ({} bytes, {} properties, {} functions, descriptor 0x{:X})", spec.name, spec.base, spec.layout.size,
-		    entry.property_table.size(), entry.function_table.size(), reinterpret_cast<std::uintptr_t>(entry.descriptor));
+		RML_INFO("Registered class {} : {} ({} bytes, {} properties, {} functions, {} events, descriptor 0x{:X})", spec.name, spec.base, spec.layout.size,
+		    entry.property_table.size(), entry.function_table.size(), entry.event_table.size(), reinterpret_cast<std::uintptr_t>(entry.descriptor));
 		return entry.descriptor;
 	}
 
@@ -293,6 +308,28 @@ namespace rml::reflection
 	{
 		m_spec->functions.push_back(FunctionSpec{std::string(name), std::move(invoker)});
 		return *this;
+	}
+
+	ClassBuilder& ClassBuilder::event(std::string_view name, const std::ptrdiff_t member_offset, std::vector<EventArgument> arguments)
+	{
+		m_spec->events.push_back(EventSpec{std::string(name), member_offset, std::move(arguments)});
+		return *this;
+	}
+
+	void fire_event(RBX::Instance* instance, const std::ptrdiff_t member_offset, const RBX::Reflection::EventArguments& arguments)
+	{
+		if (!instance)
+			return;
+
+		auto* entry = ClassRegistry::instance().class_of(instance);
+		if (!entry)
+			return;
+
+		const auto it = entry->events_by_offset.find(member_offset);
+		if (it == entry->events_by_offset.end())
+			return;
+
+		it->second->fire_event_generic(reinterpret_cast<RBX::Reflection::EventSource*>(instance), arguments);
 	}
 
 	const RBX::Reflection::ClassDescriptor* ClassBuilder::commit()
