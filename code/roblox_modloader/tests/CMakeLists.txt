@@ -4,7 +4,12 @@ file(GLOB_RECURSE RML_UNIT_TEST_SOURCES CONFIGURE_DEPENDS
 
 add_executable(rml_unit_tests ${RML_UNIT_TEST_SOURCES})
 
-target_include_directories(rml_unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+target_include_directories(rml_unit_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+        "${ROBLOX_MODLOADER_ROOT_DIR}/libs/third_party/g3d/include"
+        "${ROBLOX_MODLOADER_ROOT_DIR}/libs/third_party/rbxg3d/include"
+        "${ROBLOX_MODLOADER_ROOT_DIR}/libs/third_party/bullet/include"
+)
 target_link_libraries(rml_unit_tests PRIVATE doctest::doctest)
 target_compile_features(rml_unit_tests PRIVATE cxx_std_23)
 

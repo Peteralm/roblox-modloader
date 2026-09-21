@@ -17,7 +17,13 @@ namespace rml::graphics
 
 	static bool printable(const std::string& text)
 	{
-		return !text.empty() && text.size() < 64 && std::all_of(text.begin(), text.end(), [](const unsigned char c) { return std::isprint(c); });
+		return !text.empty() && text.size() < 64
+		    && std::all_of(
+		        text.begin(),
+		        text.end(),
+		        [](const unsigned char c) {
+			        return std::isprint(c);
+		        });
 	}
 
 	GraphicsRegistry& GraphicsRegistry::instance()
@@ -37,10 +43,23 @@ namespace rml::graphics
 		return engine ? engine->device : nullptr;
 	}
 
+	RBX::Graphics::SceneManager* GraphicsRegistry::scene_manager() const
+	{
+		return m_scene_manager.load(std::memory_order_acquire);
+	}
+
+	void GraphicsRegistry::set_scene_manager(RBX::Graphics::SceneManager* scene_manager)
+	{
+		if (m_scene_manager.exchange(scene_manager, std::memory_order_acq_rel) != scene_manager)
+			RML_INFO("SceneManager captured at 0x{:X}", reinterpret_cast<std::uintptr_t>(scene_manager));
+	}
+
 	void GraphicsRegistry::set_visual_engine(RBX::Graphics::VisualEngine* engine)
 	{
 		if (m_visual_engine.exchange(engine, std::memory_order_acq_rel) != engine)
-			RML_INFO("VisualEngine captured at 0x{:X} (device 0x{:X})", reinterpret_cast<std::uintptr_t>(engine), reinterpret_cast<std::uintptr_t>(engine ? engine->device : nullptr));
+			RML_INFO("VisualEngine captured at 0x{:X} (device 0x{:X})",
+			    reinterpret_cast<std::uintptr_t>(engine),
+			    reinterpret_cast<std::uintptr_t>(engine ? engine->device : nullptr));
 	}
 
 	void GraphicsRegistry::add_render_callback(RenderCallback callback)
@@ -96,9 +115,7 @@ namespace rml::graphics
 
 			const memory::module image(platform::studio_image_name());
 			auto** vtable = *reinterpret_cast<void***>(device);
-			const auto slots = vtable_index_of(&RBX::Graphics::Device::create_texture_with_hardware_buffer_impl, RBX::Graphics::Texture::Type::Type_2D,
-			                       RBX::Graphics::Texture::Format::RGBA8, 0u, 0u, 0u, 0u, 0u, 0u, RBX::Graphics::Texture::Usage::Static, std::string{}, nullptr)
-			                   + 1;
+			const auto slots = vtable_index_of(&RBX::Graphics::Device::create_texture_with_hardware_buffer_impl, RBX::Graphics::Texture::Type::Type_2D, RBX::Graphics::Texture::Format::RGBA8, 0u, 0u, 0u, 0u, 0u, 0u, RBX::Graphics::Texture::Usage::Static, std::string{}, nullptr) + 1;
 			for (std::size_t slot = 0; slot < slots; ++slot)
 			{
 				if (!image.contains(memory::handle(vtable[slot])))
@@ -138,6 +155,11 @@ namespace rml::graphics
 	RBX::Graphics::Device* device()
 	{
 		return GraphicsRegistry::instance().device();
+	}
+
+	RBX::Graphics::SceneManager* scene_manager()
+	{
+		return GraphicsRegistry::instance().scene_manager();
 	}
 
 	void add_render_callback(RenderCallback callback)

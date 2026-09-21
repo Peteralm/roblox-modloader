@@ -16,7 +16,9 @@ namespace rml::graphics
 
 		[[nodiscard]] RBX::Graphics::VisualEngine* visual_engine() const;
 		[[nodiscard]] RBX::Graphics::Device* device() const;
+		[[nodiscard]] RBX::Graphics::SceneManager* scene_manager() const;
 		void set_visual_engine(RBX::Graphics::VisualEngine* engine);
+		void set_scene_manager(RBX::Graphics::SceneManager* scene_manager);
 		void add_render_callback(RenderCallback callback);
 		void run_render_callbacks(RenderPassContext& context);
 		[[nodiscard]] bool validate();
@@ -29,6 +31,7 @@ namespace rml::graphics
 		};
 
 		std::atomic<RBX::Graphics::VisualEngine*> m_visual_engine{nullptr};
+		std::atomic<RBX::Graphics::SceneManager*> m_scene_manager{nullptr};
 		std::mutex m_callbacks_mutex;
 		std::vector<Entry> m_callbacks;
 		std::atomic<int> m_validation{0};

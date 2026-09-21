@@ -2,10 +2,10 @@
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/internal/hooking/engine_hooks.hpp"
 #include "RobloxModLoader/roblox/graphics/render_camera.hpp"
+#include "RobloxModLoader/roblox/graphics/scene_manager.hpp"
 #include "roblox/graphics/graphics_registry.hpp"
 
-void rml::Hooks::scene_manager_render_scene(void* self, RBX::Graphics::DeviceContext* context, RBX::Graphics::Framebuffer* target, const void* camera,
-    RBX::ArrayView<RBX::Graphics::Framebuffer*> extra, std::uint32_t capture_mode)
+void rml::Hooks::scene_manager_render_scene(void* self, RBX::Graphics::DeviceContext* context, RBX::Graphics::Framebuffer* target, const void* camera, RBX::ArrayView<RBX::Graphics::Framebuffer*> extra, std::uint32_t capture_mode)
 {
 	Hooking::get_original<&Hooks::scene_manager_render_scene>()(self, context, target, camera, extra, capture_mode);
 
@@ -13,6 +13,9 @@ void rml::Hooks::scene_manager_render_scene(void* self, RBX::Graphics::DeviceCon
 	if (!registry.validate())
 		return;
 
-	graphics::RenderPassContext pass{context, target, registry.device(), static_cast<const RBX::Graphics::RenderCamera*>(camera), self};
+	auto* scene_manager = static_cast<RBX::Graphics::SceneManager*>(self);
+	registry.set_scene_manager(scene_manager);
+
+	graphics::RenderPassContext pass{context, target, registry.device(), static_cast<const RBX::Graphics::RenderCamera*>(camera), scene_manager};
 	registry.run_render_callbacks(pass);
 }

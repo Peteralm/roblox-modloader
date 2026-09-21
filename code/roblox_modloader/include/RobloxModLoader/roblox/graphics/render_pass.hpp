@@ -10,6 +10,7 @@ namespace RBX::Graphics
 	class DeviceContext;
 	class Framebuffer;
 	class RenderCamera;
+	class SceneManager;
 	class VisualEngine;
 }
 
@@ -21,12 +22,13 @@ namespace rml::graphics
 		RBX::Graphics::Framebuffer* target;
 		RBX::Graphics::Device* device;
 		const RBX::Graphics::RenderCamera* camera;
-		void* scene_manager;
+		RBX::Graphics::SceneManager* scene_manager;
 	};
 
 	using RenderCallback = std::function<void(RenderPassContext&)>;
 
 	RML_EXPORT RBX::Graphics::VisualEngine* visual_engine();
 	RML_EXPORT RBX::Graphics::Device* device();
+	RML_EXPORT RBX::Graphics::SceneManager* scene_manager();
 	RML_EXPORT void add_render_callback(RenderCallback callback);
 }
