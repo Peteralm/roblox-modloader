@@ -634,6 +634,20 @@ namespace rml
 				},
 			},
 			{
+				"SLOTS_HOLDER_RELEASE",
+				"FF 03 01 D1 F4 4F 02 A9 FD 7B 03 A9 FD C3 00 91 F3 03 00 AA FF 0B 00 F9 ? ? ? ? F4 03 00 AA",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.slots_holder_release = ptr.add(0x6C).bl().add(0x18).bl().as<functions::slots_holder_release>();
+				},
+			},
+			{
+				"NAME_DECLARE",
+				"F4 4F BE A9 FD 7B 01 A9 FD 43 00 91 F3 03 00 AA ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? E1 03 13 AA FD 7B 41 A9 F4 4F C2 A8 ? ? ? ? FF 03 03 D1",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.name_declare = ptr.as<functions::name_declare>();
+				},
+			},
+			{
 				"SIGNAL_MUTEX_GET",
 				"FF 03 01 D1 F4 4F 02 A9 FD 7B 03 A9 FD C3 00 91 F3 03 00 AA FF 0B 00 F9 ? ? ? ? F4 03 00 AA",
 				[](const memory::handle ptr) {

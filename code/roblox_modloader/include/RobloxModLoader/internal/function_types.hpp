@@ -16,6 +16,11 @@ namespace RBX::Security
 	enum class Identity : std::uint64_t;
 }
 
+namespace RBX::Signals
+{
+	struct Signal;
+}
+
 namespace RBX
 {
 	class Name;
@@ -34,6 +39,8 @@ namespace RBX::Reflection
 namespace functions
 {
 	using get_string_atom = uintptr_t (*)(const char* name);
+	using name_declare = const RBX::Name* (*)(const char* name);
+	using slots_holder_release = void (*)(RBX::Signals::Signal* holder);
 	using descriptor_lookup = uintptr_t* (*)(uintptr_t class_descriptor_hash, uintptr_t* member_descriptor_hash);
 	using get_scheduler = uintptr_t (*)();
 	using print = void(RML_ENGINE_CALL*)(RBX::MessageType level, const char* fmt, ...);
