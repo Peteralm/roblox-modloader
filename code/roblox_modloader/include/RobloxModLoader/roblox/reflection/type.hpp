@@ -153,14 +153,13 @@ namespace RBX::Reflection
 
 	class SignatureDescriptor
 	{
-		struct Item
+	public:
+		struct Argument
 		{
-			friend class SignatureDescriptor;
-
 			const Name* name;
 			const Type* type;
-			const void* _reserved0;
-			const void* _reserved1;
+			const ClassDescriptor* class_descriptor;
+			const void* reserved_18;
 			const Variant default_handle;
 
 			[[nodiscard]] bool has_default_value() const noexcept
@@ -169,14 +168,13 @@ namespace RBX::Reflection
 			}
 		};
 
-		struct ResultItem
+		struct Result
 		{
 			const Type* type;
-			std::uint64_t _unk0; // idk what's this
+			const std::string* name;
+			const ClassDescriptor* class_descriptor;
 		};
-		static_assert(sizeof(ResultItem) == 0x10);
 
-		
 		template<typename T>
 		struct StdVector
 		{
@@ -201,18 +199,16 @@ namespace RBX::Reflection
 				return {m_begin, m_end};
 			}
 		};
-		static_assert(sizeof(StdVector<void*>) == 0x18);
 
-		StdVector<Item> m_arguments;
-		StdVector<ResultItem> m_result_types;
+		StdVector<Argument> m_arguments;
+		StdVector<Result> m_result_types;
 
-	public:
-		[[nodiscard]] std::span<const Item> arguments() const noexcept
+		[[nodiscard]] std::span<const Argument> arguments() const noexcept
 		{
 			return m_arguments.span();
 		}
 
-		[[nodiscard]] std::span<const ResultItem> result_types() const noexcept
+		[[nodiscard]] std::span<const Result> result_types() const noexcept
 		{
 			return m_result_types.span();
 		}
@@ -222,5 +218,10 @@ namespace RBX::Reflection
 			return m_result_types.empty() ? nullptr : m_result_types.front().type;
 		}
 	};
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(SignatureDescriptor::Argument, 0x70);
+	RML_ASSERT_SIZE(SignatureDescriptor::Result, 0x18);
+	RML_ASSERT_SIZE(SignatureDescriptor::StdVector<void*>, 0x18);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 	static_assert(sizeof(SignatureDescriptor) == 0x30);
 }
