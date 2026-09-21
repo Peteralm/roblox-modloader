@@ -5,6 +5,8 @@
 #include "RobloxModLoader/platform/memory/host_image.hpp"
 #include "RobloxModLoader/util/compile_time_helpers.hpp"
 
+#include <iterator>
+
 RML_LOG_SCOPE("InternalDeveloper")
 
 namespace internal_developer
@@ -23,23 +25,28 @@ namespace internal_developer
 		return rml::memory::make_batch<
 			{
 			    "IS_INTERNAL",
-			    "E8 ? ? ? ? 48 8D 15 ? ? ? ? 48 8D 0D ? ? ? ? 84 C0 48 0F 45 CA 48 8D 05 ? ? ? ? 48 89 45 ? 48 C7 45 ? ? ? ? ? 48 8D 45",
+			    "E8 ? ? ? ? 48 8D 15 ? ? ? ? 48 8D 0D ? ? ? ? 84 C0 48 0F 45 CA 48 8D 05 ? ? ? ? 48 89 44 24 ? 48 C7 44 24 ? 11 00 00 00",
 			    [](const rml::memory::handle ptr) {
 				    const auto is_internal = ptr.add(1).rip();
 				    g_engine_pointers.is_internal = is_internal.as<void*>();
 
-				    for (int offset = 0; offset < 0x100; ++offset)
+				    bool** flags[] = {&g_engine_pointers.channel_flag, &g_engine_pointers.internal_flag};
+				    std::size_t found = 0;
+
+				    for (int offset = 0; offset < 0x40 && found < std::size(flags); ++offset)
 				    {
 					    const auto instruction = is_internal.add(offset);
 					    const auto* const bytes = instruction.as<std::uint8_t*>();
 
 					    if (bytes[0] == 0x80 && bytes[1] == 0x3D && bytes[6] == 0x00)
 					    {
-						    g_engine_pointers.internal_flag = instruction.add(2).rip().add(1).as<bool*>();
-						    g_engine_pointers.channel_flag = g_engine_pointers.internal_flag;
-						    break;
+						    *flags[found++] = instruction.add(2).rip().add(1).as<bool*>();
+						    offset += 6;
 					    }
 				    }
+
+				    if (found == 1)
+					    g_engine_pointers.internal_flag = g_engine_pointers.channel_flag;
 			    },
 			}
 		>();
