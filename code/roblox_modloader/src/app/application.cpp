@@ -103,7 +103,8 @@ namespace rml
 			{
 				if (!qt_integration->is_action_hook_ready())
 					qt_integration->ensure_action_hook();
-				(void)qt_integration->ensure_gui_pump();
+				if (!qt_integration->is_gui_pump_running())
+					qt_integration->ensure_gui_pump();
 			}
 
 			std::this_thread::sleep_for(1s);

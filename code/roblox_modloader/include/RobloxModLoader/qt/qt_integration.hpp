@@ -37,6 +37,9 @@ namespace rml::qt
 		/// from any thread and idempotent.
 		bool ensure_gui_pump();
 
+		/// True once the pump is running; the retry loop stops calling ensure.
+		[[nodiscard]] bool is_gui_pump_running() const;
+
 		void on_action_triggered(QAction* action) const;
 
 		void run_on_gui_thread(std::function<void()> task);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RobloxModLoader/internal/platform.hpp"
+
 #include <array>
 #include <optional>
 #include <string_view>
@@ -25,9 +27,9 @@ namespace rml
 	    {ModKind::Scripts, "scripts"},
 	}};
 
-#if defined(_WIN32)
+#if defined(RML_WINDOWS)
 	inline constexpr std::array<std::string_view, 1> kNativeModExtensions{".dll"};
-#elif defined(__APPLE__)
+#elif defined(RML_MACOS)
 	inline constexpr std::array<std::string_view, 2> kNativeModExtensions{".dylib", ".so"};
 #else
 	inline constexpr std::array<std::string_view, 1> kNativeModExtensions{".so"};

@@ -33,9 +33,14 @@ namespace rml::qt
 		start_dispatch_timer();
 	}
 
+	bool QtIntegration::is_gui_pump_running() const
+	{
+		return static_cast<bool>(m_dispatch_timer);
+	}
+
 	bool QtIntegration::ensure_gui_pump()
 	{
-		if (m_dispatch_timer)
+		if (is_gui_pump_running())
 			return true;
 		// Studio builds its menu bar once, at startup. When the loader arrives
 		// after that moment the hook never fires, and without this the mods menu,

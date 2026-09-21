@@ -1,6 +1,7 @@
 #include "early_bootstrap.hpp"
 
 #include "RobloxModLoader/mod/global_init_mod.hpp"
+#include "RobloxModLoader/platform/core/early_phase.hpp"
 #include "generated/bootstrap_profile.hpp"
 #include "mod/mod_catalog.hpp"
 #include "native/early_mod_registry.hpp"
@@ -487,3 +488,11 @@ namespace rml::platform::windows
 			continuation();
 	}
 } // namespace rml::platform::windows
+
+namespace rml::platform
+{
+	bool global_init_phase_completed() noexcept
+	{
+		return windows::EarlyBootstrap::state() == windows::BootstrapState::Completed;
+	}
+} // namespace rml::platform
