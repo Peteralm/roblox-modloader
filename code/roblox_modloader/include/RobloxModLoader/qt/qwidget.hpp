@@ -8,6 +8,7 @@
 namespace rml::qt
 {
 	class QString;
+	class QBoxLayout;
 
 	class RML_EXPORT QWidget : public QObject, public QPaintDevice
 	{
@@ -52,6 +53,9 @@ namespace rml::qt
 		bool close();
 
 		[[nodiscard]] QWidget* viewport() const;
+		/// The layout Studio installed on this widget, or nullptr when it has none.
+		[[nodiscard]] QBoxLayout* box_layout() const;
+		[[nodiscard]] QWidget* parent_widget() const;
 
 		[[nodiscard]] QPalette palette() const;
 		void set_palette(const QPalette& palette);

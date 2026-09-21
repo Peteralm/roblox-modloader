@@ -1,5 +1,7 @@
 #include "RobloxModLoader/qt/qwidget.hpp"
 
+#include "RobloxModLoader/qt/qboxlayout.hpp"
+
 #include "RobloxModLoader/qt/qstring.hpp"
 #include "RobloxModLoader/qt/qt_module.hpp"
 
@@ -23,6 +25,22 @@ namespace rml::qt
 	{
 		static const auto dtor = detail::widgets<void (*)(void*)>("QWidget::~QWidget()");
 		detail::heap_destroy(dtor, widget);
+	}
+
+	QBoxLayout* QWidget::box_layout() const
+	{
+		static const auto fn = detail::widgets<void* (*)(const void*)>("QWidget::layout() const");
+		auto* layout = fn ? fn(this) : nullptr;
+		// Only a box layout can take a widget at an index; anything else is
+		// refused rather than reinterpreted.
+		auto* object = static_cast<QObject*>(layout);
+		return object && object->inherits("QBoxLayout") ? static_cast<QBoxLayout*>(layout) : nullptr;
+	}
+
+	QWidget* QWidget::parent_widget() const
+	{
+		static const auto fn = detail::widgets<void* (*)(const void*)>("QWidget::parentWidget() const");
+		return fn ? static_cast<QWidget*>(fn(this)) : nullptr;
 	}
 
 	void QWidget::setStyleSheet(const QString& style)

@@ -7,6 +7,8 @@
 
 namespace rml::qt
 {
+	class QIcon;
+
 	/// Where a panel lands. The values match Qt's own dock areas, which is what
 	/// QtitanDocking accepts.
 	enum class DockArea : int
@@ -27,6 +29,7 @@ namespace rml::qt
 		void set_widget(QWidget* content);
 		[[nodiscard]] QWidget* widget() const;
 		void set_caption(std::string_view caption);
+		void set_icon(const QIcon& icon);
 		void set_visible(bool visible);
 		void show_panel();
 		void activate();

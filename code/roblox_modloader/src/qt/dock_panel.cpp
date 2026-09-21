@@ -2,6 +2,7 @@
 
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/qt/qapplication.hpp"
+#include "RobloxModLoader/qt/qicon.hpp"
 #include "RobloxModLoader/qt/qstring.hpp"
 #include "RobloxModLoader/qt/qt_module.hpp"
 
@@ -40,6 +41,14 @@ namespace rml::qt
 			return;
 		const QString title(caption);
 		fn(this, title.data());
+	}
+
+	void DockPanel::set_icon(const QIcon& icon)
+	{
+		static const auto fn = detail::docking<void (*)(void*, const void*)>(
+		    "Qtitan::DockWidgetPanel::setIcon(QIcon const&)");
+		if (fn)
+			fn(this, icon.data());
 	}
 
 	void DockPanel::set_visible(const bool visible)

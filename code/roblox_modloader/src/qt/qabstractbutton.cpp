@@ -1,9 +1,14 @@
 #include "RobloxModLoader/qt/qabstractbutton.hpp"
 
+#include "RobloxModLoader/qt/qicon.hpp"
 #include "RobloxModLoader/qt/qstring.hpp"
 #include "RobloxModLoader/qt/qt_module.hpp"
 #include "qt_connect.hpp"
 
+#include "RobloxModLoader/memory/foreign_call.hpp"
+
+#include <cstdint>
+#include <cstring>
 #include <utility>
 
 namespace rml::qt
@@ -16,6 +21,37 @@ namespace rml::qt
 			const QString value(text);
 			fn(this, value.data());
 		}
+	}
+
+	std::string QAbstractButton::text() const
+	{
+		static void* const get = detail::widgets_export("QAbstractButton::text() const");
+		if (!get)
+			return {};
+		// The getter returns QString by value, so the caller owns the storage.
+		void* storage = nullptr;
+		memory::call_returning_member(get, storage, static_cast<const void*>(this));
+		QString value;
+		std::memcpy(value.storage(), &storage, sizeof(storage));
+		return value.to_utf8();
+	}
+
+	void QAbstractButton::setIcon(const QIcon& icon)
+	{
+		static const auto fn = detail::widgets<void (*)(void*, const void*)>(
+		    "QAbstractButton::setIcon(QIcon const&)");
+		if (fn)
+			fn(this, icon.data());
+	}
+
+	void QAbstractButton::setIconSize(const int width, const int height)
+	{
+		static const auto fn = detail::widgets<void (*)(void*, const void*)>(
+		    "QAbstractButton::setIconSize(QSize const&)");
+		if (!fn)
+			return;
+		const std::int32_t size[2]{width, height};
+		fn(this, size);
 	}
 
 	void QAbstractButton::setChecked(const bool checked)
