@@ -47,6 +47,23 @@ namespace rml::reflection
 		std::vector<EventSpec> events;
 	};
 
+	struct ExtensionSpec
+	{
+		std::string name;
+		std::vector<PropertySpec> properties;
+		std::vector<FunctionSpec> functions;
+	};
+
+	struct RegisteredExtension
+	{
+		RBX::Reflection::ClassDescriptor* descriptor{};
+		std::vector<std::unique_ptr<std::byte[]>> member_storage;
+		std::vector<std::shared_ptr<void>> accessors;
+		std::vector<std::shared_ptr<FunctionInvoker>> invokers;
+		std::vector<const RBX::Reflection::PropertyDescriptor*> property_table;
+		std::vector<const RBX::Reflection::FunctionDescriptor*> function_table;
+	};
+
 	struct RegisteredClass;
 
 	class ModInstanceCreator final : public RBX::ICreator
@@ -96,6 +113,7 @@ namespace rml::reflection
 
 		[[nodiscard]] static bool available();
 		[[nodiscard]] std::expected<RBX::Reflection::ClassDescriptor*, std::string> define(const ClassSpec& spec);
+		[[nodiscard]] std::expected<RBX::Reflection::ClassDescriptor*, std::string> extend(const ExtensionSpec& spec);
 		[[nodiscard]] const RBX::ICreator* creator_for(const RBX::Name* name) const;
 		[[nodiscard]] RBX::Reflection::ClassDescriptor* find_engine_class(std::string_view name) const;
 		[[nodiscard]] RegisteredClass* class_of(const void* instance);
@@ -103,6 +121,7 @@ namespace rml::reflection
 
 	private:
 		std::deque<RegisteredClass> m_classes;
+		std::deque<RegisteredExtension> m_extensions;
 		std::unordered_map<const RBX::Name*, const RBX::ICreator*> m_creators;
 		std::unordered_map<const RBX::Reflection::ClassDescriptor*, RegisteredClass*> m_by_descriptor;
 	};

@@ -8,6 +8,23 @@
 #include <string>
 
 static std::shared_ptr<spdlog::logger> g_log;
+static int g_workspace_counter;
+
+static int workspace_ping(RBX::Instance*, lua_State* L)
+{
+	lua_pushstring(L, "pong");
+	return 1;
+}
+
+static int get_workspace_counter(RBX::Instance*)
+{
+	return g_workspace_counter;
+}
+
+static void set_workspace_counter(RBX::Instance*, const int& value)
+{
+	g_workspace_counter = value;
+}
 
 class ModThing final : public rml::reflection::DescribedCreatable<ModThing>
 {
@@ -56,6 +73,10 @@ public:
 		    .property("Label", &ModThing::label)
 		    .function("Reset", &ModThing::reset)
 		    .event("SpeedReset", &ModThing::speed_reset, {"previous"})
+		    .commit();
+		context.extend_class("Workspace")
+		    .function("RmlPing", &workspace_ping)
+		    .property("RmlCounter", &get_workspace_counter, &set_workspace_counter)
 		    .commit();
 		g_log->info("ModThing registered ({} bytes)", sizeof(ModThing));
 	}

@@ -175,4 +175,53 @@ namespace rml::reflection
 		Getter m_getter;
 		Setter m_setter;
 	};
+
+	template<typename Class, typename T>
+	class FunctionGetSet final : public GetSet<T>
+	{
+	public:
+		using Getter = T (*)(Class*);
+		using Setter = void (*)(Class*, const T&);
+
+		FunctionGetSet(Getter getter, Setter setter) :
+		    m_getter(getter),
+		    m_setter(setter)
+		{
+		}
+
+		bool is_read_only() const override
+		{
+			return m_setter == nullptr;
+		}
+
+		bool is_write_only() const override
+		{
+			return m_getter == nullptr;
+		}
+
+		T get_value(const void* instance) const override
+		{
+			return m_getter ? m_getter(static_cast<Class*>(const_cast<void*>(instance))) : T{};
+		}
+
+		void set_value(void* instance, const T& value) const override
+		{
+			if (m_setter)
+				m_setter(static_cast<Class*>(instance), value);
+		}
+
+		bool equal_values(const void* a, const void* b) const override
+		{
+			return get_value(a) == get_value(b);
+		}
+
+		bool is_value_equal_to(const void* instance, const T& value) const override
+		{
+			return get_value(instance) == value;
+		}
+
+	private:
+		Getter m_getter;
+		Setter m_setter;
+	};
 }

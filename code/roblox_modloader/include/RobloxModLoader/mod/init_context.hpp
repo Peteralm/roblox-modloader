@@ -25,6 +25,12 @@ namespace rml
 			return reflection::TypedClassBuilder<Derived>(name, base);
 		}
 
+		template<typename Base = RBX::Instance>
+		[[nodiscard]] reflection::TypedExtensionBuilder<Base> extend_class(std::string_view name)
+		{
+			return reflection::TypedExtensionBuilder<Base>(name);
+		}
+
 	private:
 		InitGate& m_gate;
 	};

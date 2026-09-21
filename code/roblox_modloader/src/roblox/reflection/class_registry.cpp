@@ -219,6 +219,78 @@ namespace rml::reflection
 		return entry.descriptor;
 	}
 
+	template<typename T>
+	static void append_members(RBX::Reflection::ClassDescriptor* descriptor, const std::vector<const T*>& table)
+	{
+		if (table.empty())
+			return;
+
+		auto& container = static_cast<RBX::Reflection::MemberDescriptorContainer<T>&>(*descriptor);
+		container.views.push_back(RBX::ArrayView<const T*>{table});
+
+		std::vector<RBX::Reflection::ClassDescriptor*> pending{descriptor};
+		while (!pending.empty())
+		{
+			auto* current = pending.back();
+			pending.pop_back();
+			static_cast<RBX::Reflection::MemberDescriptorContainer<T>&>(*current).total += table.size();
+			pending.insert(pending.end(), current->derived_classes.begin(), current->derived_classes.end());
+		}
+	}
+
+	std::expected<RBX::Reflection::ClassDescriptor*, std::string> ClassRegistry::extend(const ExtensionSpec& spec)
+	{
+		if (!available())
+			return std::unexpected("reflection registration is unavailable on this build");
+
+		if (!g_init_gate || !g_init_gate->is_open())
+			return std::unexpected("class extension is only possible inside on_init");
+
+		auto* descriptor = find_engine_class(spec.name);
+		if (!descriptor)
+			return std::unexpected(std::format("class '{}' not found", spec.name));
+
+		if (static_cast<RBX::Reflection::MemberDescriptorContainer<RBX::Reflection::PropertyDescriptor>&>(*descriptor).finalized)
+			return std::unexpected(std::format("class '{}' is already finalized", spec.name));
+
+		auto& entry = m_extensions.emplace_back();
+		entry.descriptor = descriptor;
+
+		for (const auto& property : spec.properties)
+		{
+			auto member = make_property(descriptor, property.name, property.category, property.type, property.accessor.get());
+			if (!member)
+			{
+				m_extensions.pop_back();
+				return std::unexpected(member.error());
+			}
+
+			entry.property_table.push_back(reinterpret_cast<const RBX::Reflection::PropertyDescriptor*>(member->storage.get()));
+			entry.member_storage.push_back(std::move(member->storage));
+			entry.accessors.push_back(property.accessor);
+		}
+
+		for (const auto& function : spec.functions)
+		{
+			auto member = make_function(descriptor, function.name, function.invoker.get());
+			if (!member)
+			{
+				m_extensions.pop_back();
+				return std::unexpected(member.error());
+			}
+
+			entry.function_table.push_back(reinterpret_cast<const RBX::Reflection::FunctionDescriptor*>(member->storage.get()));
+			entry.member_storage.push_back(std::move(member->storage));
+			entry.invokers.push_back(function.invoker);
+		}
+
+		append_members(descriptor, entry.property_table);
+		append_members(descriptor, entry.function_table);
+
+		RML_INFO("Extended class {} with {} properties and {} functions", spec.name, entry.property_table.size(), entry.function_table.size());
+		return descriptor;
+	}
+
 	RegisteredClass* ClassRegistry::class_of(const void* instance)
 	{
 		const auto it = m_by_descriptor.find(descriptor_of(instance));
@@ -335,6 +407,38 @@ namespace rml::reflection
 	const RBX::Reflection::ClassDescriptor* ClassBuilder::commit()
 	{
 		auto result = ClassRegistry::instance().define(*m_spec);
+		if (!result)
+			throw std::logic_error(result.error());
+		return *result;
+	}
+}
+
+namespace rml::reflection
+{
+	ExtensionBuilder::ExtensionBuilder(std::string_view class_name) :
+	    m_spec(std::make_unique<ExtensionSpec>(std::string(class_name)))
+	{
+	}
+
+	ExtensionBuilder::~ExtensionBuilder() = default;
+	ExtensionBuilder::ExtensionBuilder(ExtensionBuilder&&) noexcept = default;
+	ExtensionBuilder& ExtensionBuilder::operator=(ExtensionBuilder&&) noexcept = default;
+
+	ExtensionBuilder& ExtensionBuilder::property(std::string_view name, const PropertyType type, std::shared_ptr<void> accessor, std::string_view category)
+	{
+		m_spec->properties.push_back(PropertySpec{std::string(name), std::string(category), type, std::move(accessor)});
+		return *this;
+	}
+
+	ExtensionBuilder& ExtensionBuilder::function(std::string_view name, std::shared_ptr<FunctionInvoker> invoker)
+	{
+		m_spec->functions.push_back(FunctionSpec{std::string(name), std::move(invoker)});
+		return *this;
+	}
+
+	const RBX::Reflection::ClassDescriptor* ExtensionBuilder::commit()
+	{
+		auto result = ClassRegistry::instance().extend(*m_spec);
 		if (!result)
 			throw std::logic_error(result.error());
 		return *result;

@@ -55,6 +55,26 @@ namespace rml::reflection
 		Method m_method;
 	};
 
+	template<typename Class>
+	class FunctionInvokerFn final : public FunctionInvoker
+	{
+	public:
+		using Function = int (*)(Class*, lua_State*);
+
+		explicit FunctionInvokerFn(Function function) :
+		    m_function(function)
+		{
+		}
+
+		int invoke(RBX::Instance* instance, lua_State* L) const override
+		{
+			return m_function(static_cast<Class*>(instance), L);
+		}
+
+	private:
+		Function m_function;
+	};
+
 	struct EventArgument
 	{
 		PropertyType type;
@@ -76,6 +96,55 @@ namespace rml::reflection
 
 	private:
 		std::unique_ptr<ClassSpec> m_spec;
+	};
+
+	struct ExtensionSpec;
+
+	class RML_EXPORT ExtensionBuilder
+	{
+	public:
+		explicit ExtensionBuilder(std::string_view class_name);
+		~ExtensionBuilder();
+		ExtensionBuilder(ExtensionBuilder&&) noexcept;
+		ExtensionBuilder& operator=(ExtensionBuilder&&) noexcept;
+
+		ExtensionBuilder& property(std::string_view name, PropertyType type, std::shared_ptr<void> accessor, std::string_view category);
+		ExtensionBuilder& function(std::string_view name, std::shared_ptr<FunctionInvoker> invoker);
+		const RBX::Reflection::ClassDescriptor* commit();
+
+	private:
+		std::unique_ptr<ExtensionSpec> m_spec;
+	};
+
+	template<typename Base>
+	class TypedExtensionBuilder
+	{
+	public:
+		explicit TypedExtensionBuilder(std::string_view class_name) :
+		    m_builder(class_name)
+		{
+		}
+
+		template<typename T>
+		TypedExtensionBuilder& property(std::string_view name, T (*getter)(Base*), void (*setter)(Base*, const T&), std::string_view category = "Data")
+		{
+			m_builder.property(name, property_type_of<T>::value, std::make_shared<FunctionGetSet<Base, T>>(getter, setter), category);
+			return *this;
+		}
+
+		TypedExtensionBuilder& function(std::string_view name, int (*function)(Base*, lua_State*))
+		{
+			m_builder.function(name, std::make_shared<FunctionInvokerFn<Base>>(function));
+			return *this;
+		}
+
+		const RBX::Reflection::ClassDescriptor* commit()
+		{
+			return m_builder.commit();
+		}
+
+	private:
+		ExtensionBuilder m_builder;
 	};
 
 	template<typename Derived>
