@@ -25,6 +25,17 @@ namespace rml::qt
 		[[nodiscard]] const char* class_name() const;
 		[[nodiscard]] bool inherits(const char* class_name) const;
 
+		/// The thread this object belongs to; Qt only allows timers and widgets to
+		/// be driven from it.
+		[[nodiscard]] void* owner_thread() const;
+		/// Hands the object over to another thread. The object must have no parent
+		/// and must not be in use by its current thread.
+		void move_to_thread(void* thread);
+		/// Queues a no-argument slot call on the object's own thread and reports
+		/// whether Qt accepted it. This is the only safe way to start a timer that
+		/// was built on another thread.
+		bool invoke_queued(const char* member);
+
 		[[nodiscard]] void* handle()
 		{
 			return this;

@@ -6,6 +6,7 @@
 #include "RobloxModLoader/qt/qtimer.hpp"
 #include "RobloxModLoader/rml_export.hpp"
 
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <vector>
@@ -31,6 +32,11 @@ namespace rml::qt
 
 		void on_menu_bar_built(QMenuBar* menu_bar);
 
+		/// Starts the GUI-thread pump without waiting for Studio to build its menu
+		/// bar, and adopts a menu bar that was built before the hook existed. Safe
+		/// from any thread and idempotent.
+		bool ensure_gui_pump();
+
 		void on_action_triggered(QAction* action) const;
 
 		void run_on_gui_thread(std::function<void()> task);
@@ -38,6 +44,8 @@ namespace rml::qt
 		[[nodiscard]] static QtIntegration* instance();
 
 	private:
+		void start_dispatch_timer();
+		void adopt_existing_menu_bar();
 		void drain_tasks();
 
 		ActionDispatcher m_dispatcher;
@@ -46,6 +54,7 @@ namespace rml::qt
 		std::mutex m_tasks_mutex;
 		std::vector<std::function<void()>> m_tasks;
 		QtOwned<QTimer> m_dispatch_timer;
+		std::atomic_bool m_menu_bar_known{};
 
 		static QtIntegration* s_instance;
 	};
