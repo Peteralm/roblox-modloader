@@ -248,7 +248,13 @@ namespace rml::native
 				session.finish();
 				DescriptorSession::active = previous;
 				if (result == 0 && !session.failed) entry.status = EarlyModStatus::Attached;
-				else context.log(3, "Global-init entry failed or faulted; module remains pinned");
+				else
+				{
+					// The code is the module's own; without it every failure looks alike.
+					const auto message = "Global-init entry failed or faulted (code " + std::to_string(result)
+					    + (session.failed ? ", reservations abandoned" : "") + "); module remains pinned";
+					context.log(3, message.c_str());
+				}
 			}
 			catch (...)
 			{

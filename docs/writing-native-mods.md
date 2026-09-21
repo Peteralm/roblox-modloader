@@ -87,6 +87,38 @@ down manually in `on_unload`. Resolve `target_address` from the engine yourself 
 pattern scan or a known offset); see [`examples/internal_developer`](../examples/internal_developer)
 for a working hook.
 
+## Global-init mods
+
+A mod whose manifest declares `load_phase = "global_init"` is entered before Studio builds its
+class registry, through two extra exports:
+
+```cpp
+#include <RobloxModLoader/mod/global_init_mod.hpp>
+
+RML_EXPORT_GLOBAL_INIT_ABI_VERSION()
+
+extern "C" RML_GLOBAL_INIT_EXPORT int rml_global_init(const RmlGlobalInitContext* context) noexcept
+{
+    // Never let an exception cross this boundary; return nonzero to fail.
+}
+```
+
+`context->descriptors` is the only way to add a class the engine did not ship. It is valid for the
+duration of the call and nowhere else:
+
+- `find_class(name)` returns a live class descriptor, or `nullptr`.
+- `begin_batch(count)` opens a reservation; `reserve_class` validates and stages one class;
+  `abort_batch` discards the whole reservation; `commit_batch` publishes it and cannot fail.
+
+Reserve every class first and commit once. `reserve_class` returns nonzero on refusal: `1` for a
+malformed payload, `2` for a name collision or a descriptor whose own name does not match, `3` for
+a duplicate within the batch, and `4` for a missing base class.
+
+A reserved class is visible to reflection, but `Instance.new` on it is not supported yet: on
+Studio 0.739 a descriptor carries no creation function of its own, so a descriptor copied from an
+existing class cannot become buildable by editing its fields. Treat this API as class *metadata*
+registration until the engine's creation path is mapped.
+
 ## Notes
 
 - Keep hook bodies small and fast — they run on engine threads.
