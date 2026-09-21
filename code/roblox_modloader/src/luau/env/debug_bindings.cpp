@@ -645,6 +645,9 @@ namespace rml::luau
 			return false;
 		}
 
+		// The engine's debug table is shared by every script in this VM and ships locked. Unlock it
+		// only for the merge, then lock it again so Studio's own plugins keep the table they expect.
+		const auto was_readonly = lua_getreadonly(L, -1) != 0;
 		lua_setreadonly(L, -1, false);
 
 		for (const auto& [name, fn] : entries)
@@ -652,6 +655,8 @@ namespace rml::luau
 			push_bound_function(env, L, name, fn);
 			lua_setfield(L, -2, name);
 		}
+
+		lua_setreadonly(L, -1, was_readonly);
 
 		return true;
 	}

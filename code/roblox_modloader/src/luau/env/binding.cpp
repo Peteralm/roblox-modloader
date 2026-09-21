@@ -2,6 +2,7 @@
 
 #include "RobloxModLoader/luau/script_host.hpp"
 #include "RobloxModLoader/luau/vm/stack_guard.hpp"
+#include "RobloxModLoader/luau/vm/protected_call.hpp"
 
 #include <cstring>
 
@@ -147,6 +148,16 @@ namespace rml::luau
 		return vm::Ref::take(target, -1);
 	}
 
+	namespace
+	{
+		struct BinderCall
+		{
+			bool (*bind)(ScriptEnv&, lua_State*);
+			ScriptEnv* env;
+			bool ok;
+		};
+	}
+
 	bool bind_globals(ScriptEnv& env, lua_State* L) noexcept
 	{
 		bool all_bound = true;
@@ -154,8 +165,26 @@ namespace rml::luau
 		for (const auto& [name, bind] : kBinders)
 		{
 			const auto top = lua_gettop(L);
+			RML_DEBUG("Binding the '{}' global for mod '{}'", name, env.mod().mod_name());
 
-			if (!bind(env, L))
+			// A binder that raises - writing into a table Studio marked readonly, say - would unwind
+			// past our frames and Studio would kill the process over the unhandled lua_exception.
+			BinderCall call{bind, &env, false};
+			const auto bound = vm::protected_call(
+			    L,
+			    [](lua_State* state, void* ctx) {
+				    auto* pending = static_cast<BinderCall*>(ctx);
+				    pending->ok = pending->bind(*pending->env, state);
+			    },
+			    &call, "rml_bind");
+
+			if (!bound)
+			{
+				RML_ERROR("Binding the '{}' global for mod '{}' raised: {}", name, env.mod().mod_name(),
+				          bound.error());
+				all_bound = false;
+			}
+			else if (!call.ok)
 			{
 				RML_ERROR("Failed to bind the '{}' global for mod '{}'", name, env.mod().mod_name());
 				all_bound = false;

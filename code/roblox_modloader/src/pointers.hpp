@@ -32,7 +32,9 @@ namespace rml
 		void* m_main_window{};
 
 	public:
-		RobloxPointers m_roblox_pointers;
+		// Every field must start null: a signature that fails to resolve leaves its slot
+		// untouched, and a garbage slot reads as "resolved" and gets called.
+		RobloxPointers m_roblox_pointers{};
 	};
 }
 
