@@ -20,23 +20,20 @@ namespace rml::qt
 
 	void DockPanel::set_widget(QWidget* content)
 	{
-		static const auto fn = detail::docking<void (*)(void*, void*)>(
-		    "Qtitan::DockWidgetPanel::setWidget(QWidget*)");
+		static const auto fn = detail::docking<void (*)(void*, void*)>("Qtitan::DockWidgetPanel::setWidget(QWidget*)");
 		if (fn && content)
 			fn(this, content);
 	}
 
 	QWidget* DockPanel::widget() const
 	{
-		static const auto fn = detail::docking<void* (*)(const void*)>(
-		    "Qtitan::DockWidgetPanel::widget() const");
+		static const auto fn = detail::docking<void* (*)(const void*)>("Qtitan::DockWidgetPanel::widget() const");
 		return fn ? static_cast<QWidget*>(fn(this)) : nullptr;
 	}
 
 	void DockPanel::set_caption(const std::string_view caption)
 	{
-		static const auto fn = detail::docking<void (*)(void*, const void*)>(
-		    "Qtitan::DockWidgetPanel::setCaption(QString const&)");
+		static const auto fn = detail::docking<void (*)(void*, const void*)>("Qtitan::DockWidgetPanel::setCaption(QString const&)");
 		if (!fn)
 			return;
 		const QString title(caption);
@@ -45,16 +42,14 @@ namespace rml::qt
 
 	void DockPanel::set_icon(const QIcon& icon)
 	{
-		static const auto fn = detail::docking<void (*)(void*, const void*)>(
-		    "Qtitan::DockWidgetPanel::setIcon(QIcon const&)");
+		static const auto fn = detail::docking<void (*)(void*, const void*)>("Qtitan::DockWidgetPanel::setIcon(QIcon const&)");
 		if (fn)
 			fn(this, icon.data());
 	}
 
 	void DockPanel::set_visible(const bool visible)
 	{
-		static const auto fn = detail::docking<void (*)(void*, bool)>(
-		    "Qtitan::DockWidgetPanel::setPanelVisible(bool)");
+		static const auto fn = detail::docking<void (*)(void*, bool)>("Qtitan::DockWidgetPanel::setPanelVisible(bool)");
 		if (fn)
 			fn(this, visible);
 	}
@@ -85,12 +80,10 @@ namespace rml::qt
 		if (cached)
 			return cached;
 
-		static const auto manager_of_window = detail::docking_optional<void* (*)(const void*)>(
-		    "Qtitan::DockMainWindow::dockPanelManager() const");
+		static const auto manager_of_window = detail::docking_optional<void* (*)(const void*)>("Qtitan::DockMainWindow::dockPanelManager() const");
 		// Studio's own panels know their manager, which works even when the main
 		// window is a custom class the docking library does not name.
-		static const auto manager_of_panel = detail::docking_optional<void* (*)(const void*)>(
-		    "Qtitan::DockPanelBase::dockManager() const");
+		static const auto manager_of_panel = detail::docking_optional<void* (*)(const void*)>("Qtitan::DockPanelBase::dockManager() const");
 		if (!manager_of_window && !manager_of_panel)
 		{
 			RML_WARN("QtitanDocking is unavailable; dock panels are disabled");
@@ -120,8 +113,7 @@ namespace rml::qt
 
 	DockPanel* DockManager::add_panel(const std::string_view caption, const DockArea area)
 	{
-		static const auto fn = detail::docking<void* (*)(void*, const void*, int, void*)>(
-		    "Qtitan::DockPanelManager::addDockPanel(QString const&, Qtitan::DockPanelArea, Qtitan::DockPanelBase*)");
+		static const auto fn = detail::docking<void* (*)(void*, const void*, int, void*)>("Qtitan::DockPanelManager::addDockPanel(QString const&, Qtitan::DockPanelArea, Qtitan::DockPanelBase*)");
 		if (!fn)
 			return nullptr;
 		const QString title(caption);
@@ -130,16 +122,14 @@ namespace rml::qt
 
 	void DockManager::remove_panel(DockPanel* panel)
 	{
-		static const auto fn = detail::docking<void (*)(void*, void*)>(
-		    "Qtitan::DockPanelManager::removeDockPanel(Qtitan::DockWidgetPanel*)");
+		static const auto fn = detail::docking<void (*)(void*, void*)>("Qtitan::DockPanelManager::removeDockPanel(Qtitan::DockWidgetPanel*)");
 		if (fn && panel)
 			fn(this, panel);
 	}
 
 	void DockManager::show_panel(DockPanel* panel, const bool focus)
 	{
-		static const auto fn = detail::docking<void (*)(void*, void*, bool, bool)>(
-		    "Qtitan::DockPanelManager::showDockPanel(Qtitan::DockWidgetPanel*, bool, bool)");
+		static const auto fn = detail::docking<void (*)(void*, void*, bool, bool)>("Qtitan::DockPanelManager::showDockPanel(Qtitan::DockWidgetPanel*, bool, bool)");
 		if (fn && panel)
 			fn(this, panel, focus, true);
 	}

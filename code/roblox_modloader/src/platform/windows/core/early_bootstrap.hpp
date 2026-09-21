@@ -7,8 +7,22 @@
 
 namespace rml::platform::windows
 {
-	enum class BootstrapState : long { Unarmed, Armed, Running, Completed, Failed };
-	enum class ResolveError { InvalidImage, UnknownBuild, MissingSignature, AmbiguousSignature, InvalidShape };
+	enum class BootstrapState : long
+	{
+		Unarmed,
+		Armed,
+		Running,
+		Completed,
+		Failed
+	};
+	enum class ResolveError
+	{
+		InvalidImage,
+		UnknownBuild,
+		MissingSignature,
+		AmbiguousSignature,
+		InvalidShape
+	};
 
 	struct EmbeddedBootstrapProfile
 	{
@@ -33,8 +47,7 @@ namespace rml::platform::windows
 		const EmbeddedBootstrapProfile* profile;
 	};
 
-	[[nodiscard]] std::expected<ResolvedGlobalInitWindow, ResolveError> resolve_global_init_window(
-	    void* host_module, std::span<const EmbeddedBootstrapProfile> profiles) noexcept;
+	[[nodiscard]] std::expected<ResolvedGlobalInitWindow, ResolveError> resolve_global_init_window(void* host_module, std::span<const EmbeddedBootstrapProfile> profiles) noexcept;
 
 	class EarlyBootstrap
 	{

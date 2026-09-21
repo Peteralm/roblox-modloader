@@ -3,7 +3,7 @@
 #include <new>
 #include <utility>
 #if defined(_WIN32)
-#include <windows.h>
+	#include <windows.h>
 #endif
 
 namespace rml::native
@@ -14,16 +14,27 @@ namespace rml::native
 		// queries can throw; the two early exports must catch internally (noexcept).
 		int invoke_cpp(int (*call)(void*), void* data) noexcept
 		{
-			try { return call(data); }
-			catch (...) { return -1; }
+			try
+			{
+				return call(data);
+			}
+			catch (...)
+			{
+				return -1;
+			}
 		}
 
 		int invoke_contained(int (*call)(void*), void* data) noexcept
 		{
 #if defined(_WIN32) && defined(_MSC_VER)
-			__try { return invoke_cpp(call, data); }
+			__try
+			{
+				return invoke_cpp(call, data);
+			}
 			__except (GetExceptionCode() == 0xe06d7363 ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER)
-			{ return -2; }
+			{
+				return -2;
+			}
 #else
 			return invoke_cpp(call, data);
 #endif
@@ -68,7 +79,12 @@ namespace rml::native
 		// cannot strand them. Module-owned storage is never freed by this adapter.
 		struct DescriptorSession
 		{
-			struct Batch { Batch* next; void* backend; bool failed = false; };
+			struct Batch
+			{
+				Batch* next;
+				void* backend;
+				bool failed = false;
+			};
 			const RmlDescriptorRegistrationApi& backend;
 			Batch* batches = nullptr;
 			bool failed = false;
@@ -77,14 +93,16 @@ namespace rml::native
 			Batch* find(void* handle) noexcept
 			{
 				for (auto* batch = batches; batch; batch = batch->next)
-					if (batch == handle) return batch;
+					if (batch == handle)
+						return batch;
 				failed = true;
 				return nullptr;
 			}
 			void remove(Batch* batch) noexcept
 			{
 				auto** link = &batches;
-				while (*link != batch) link = &(*link)->next;
+				while (*link != batch)
+					link = &(*link)->next;
 				*link = batch->next;
 			}
 			static void* find_class(const char* name) noexcept
@@ -97,9 +115,11 @@ namespace rml::native
 			}
 			static void* begin(std::uint32_t count) noexcept
 			{
-				if (!active || !count || !mutable_registry()) return nullptr;
+				if (!active || !count || !mutable_registry())
+					return nullptr;
 				auto* batch = new (std::nothrow) Batch{active->batches, nullptr};
-				if (!batch) return nullptr;
+				if (!batch)
+					return nullptr;
 				active->batches = batch;
 				batch->backend = active->backend.begin_batch(count);
 				if (!batch->backend)
@@ -112,13 +132,14 @@ namespace rml::native
 			}
 			static int reserve(void* handle, const RmlClassRegistrationV1* value) noexcept
 			{
-				if (!active) return 1;
+				if (!active)
+					return 1;
 				auto* batch = active->find(handle);
-				if (!batch) return 1;
+				if (!batch)
+					return 1;
 				// Do not inspect any tail fields until the versioned header passes.
-				if (batch->failed || !rml_valid_class_registration(value) || !value->class_name
-				    || !value->base_class_name || !value->descriptor || !value->factory
-				    || (value->member_count && !value->members) || value->flags != 0)
+				if (batch->failed || !rml_valid_class_registration(value) || !value->class_name || !value->base_class_name
+				    || !value->descriptor || !value->factory || (value->member_count && !value->members) || value->flags != 0)
 				{
 					batch->failed = true;
 					return 1;
@@ -129,19 +150,24 @@ namespace rml::native
 			}
 			static void abort(void* handle) noexcept
 			{
-				if (!active) return;
+				if (!active)
+					return;
 				auto* batch = active->find(handle);
-				if (!batch) return;
+				if (!batch)
+					return;
 				auto* backend_batch = batch->backend;
 				active->remove(batch);
 				delete batch;
-				if (backend_batch) active->backend.abort_batch(backend_batch);
+				if (backend_batch)
+					active->backend.abort_batch(backend_batch);
 			}
 			static void commit(void* handle) noexcept
 			{
-				if (!active) return;
+				if (!active)
+					return;
 				auto* batch = active->find(handle);
-				if (!batch) return;
+				if (!batch)
+					return;
 				if (batch->failed)
 				{
 					active->failed = true;
@@ -161,11 +187,12 @@ namespace rml::native
 			}
 			void finish() noexcept
 			{
-				if (batches) failed = true;
-				while (batches) invoke_contained(abort_one, this);
+				if (batches)
+					failed = true;
+				while (batches)
+					invoke_contained(abort_one, this);
 			}
-			static constexpr RmlDescriptorRegistrationApi api{RML_DESCRIPTOR_REGISTRATION_API_VERSION,
-			    sizeof(RmlDescriptorRegistrationApi), find_class, mutable_registry, begin, reserve, abort, commit};
+			static constexpr RmlDescriptorRegistrationApi api{RML_DESCRIPTOR_REGISTRATION_API_VERSION, sizeof(RmlDescriptorRegistrationApi), find_class, mutable_registry, begin, reserve, abort, commit};
 		};
 		thread_local DescriptorSession* DescriptorSession::active = nullptr;
 
@@ -204,23 +231,27 @@ namespace rml::native
 		for (const auto& definition : definitions)
 		{
 			if (!definition.enabled || !definition.auto_load || definition.load_phase != config::ModLoadPhase::GlobalInit
-			    || !definition.native_entry) continue;
+			    || !definition.native_entry)
+				continue;
 			auto [it, inserted] = m_entries.try_emplace(key(*definition.native_entry));
-			if (!inserted) continue;
+			if (!inserted)
+				continue;
 			auto& entry = it->second;
 			try
 			{
 				entry.adoption.module = std::make_unique<memory::module>(*definition.native_entry);
 				if (auto result = entry.adoption.module->attach(); !result)
 				{
-					if (context.log) context.log(3, result.error().c_str());
+					if (context.log)
+						context.log(3, result.error().c_str());
 					continue;
 				}
 				Preflight preflight{entry.adoption, context};
 				if (invoke_contained(Preflight::run, &preflight) != 0)
 				{
 					(void)entry.adoption.module->detach();
-					if (context.log) context.log(3, preflight.error);
+					if (context.log)
+						context.log(3, preflight.error);
 					continue;
 				}
 				entry.adoption.root = definition.root;
@@ -231,7 +262,8 @@ namespace rml::native
 #if defined(_WIN32)
 				HMODULE pinned = nullptr;
 				if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
-				        reinterpret_cast<LPCWSTR>(preflight.early), &pinned))
+				        reinterpret_cast<LPCWSTR>(preflight.early),
+				        &pinned))
 				{
 					(void)entry.adoption.module->detach();
 					context.log(3, "Failed to pin global-init module");
@@ -247,19 +279,22 @@ namespace rml::native
 				const int result = invoke_contained(EarlyCall::run, &call);
 				session.finish();
 				DescriptorSession::active = previous;
-				if (result == 0 && !session.failed) entry.status = EarlyModStatus::Attached;
+				if (result == 0 && !session.failed)
+					entry.status = EarlyModStatus::Attached;
 				else
 				{
 					// The code is the module's own; without it every failure looks alike.
-					const auto message = "Global-init entry failed or faulted (code " + std::to_string(result)
-					    + (session.failed ? ", reservations abandoned" : "") + "); module remains pinned";
+					const auto message =
+					    "Global-init entry failed or faulted (code " + std::to_string(result) + (session.failed ? ", reservations abandoned" : "") + "); module remains pinned";
 					context.log(3, message.c_str());
 				}
 			}
 			catch (...)
 			{
-				if (entry.adoption.module && !entry.pinned) (void)entry.adoption.module->detach();
-				if (context.log) context.log(3, "Exception while attaching global-init module");
+				if (entry.adoption.module && !entry.pinned)
+					(void)entry.adoption.module->detach();
+				if (context.log)
+					context.log(3, "Exception while attaching global-init module");
 			}
 		}
 	}

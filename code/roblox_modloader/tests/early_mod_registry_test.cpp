@@ -1,14 +1,21 @@
-#include <doctest/doctest.h>
 #include "native/early_mod_registry.hpp"
 #include "native/native_mod_loader.hpp"
+
 #include <RobloxModLoader/logger/logger.hpp>
-#include <windows.h>
 #include <array>
+#include <doctest/doctest.h>
 #include <string>
+#include <windows.h>
 
 // Isolate core lifecycle tests from Studio's logging/configuration startup.
-std::shared_ptr<spdlog::logger> global_logger() { return spdlog::default_logger(); }
-std::shared_ptr<spdlog::logger> rml::Logger::get_logger(const std::string&) { return global_logger(); }
+std::shared_ptr<spdlog::logger> global_logger()
+{
+	return spdlog::default_logger();
+}
+std::shared_ptr<spdlog::logger> rml::Logger::get_logger(const std::string&)
+{
+	return global_logger();
+}
 
 namespace
 {
@@ -22,23 +29,52 @@ namespace
 		const void* reserved = nullptr;
 		std::string root;
 		static inline Descriptors* current;
-		Descriptors() { current = this; }
-		RmlDescriptorRegistrationApi api{1, sizeof(RmlDescriptorRegistrationApi),
-		    [](const char*) noexcept -> void* { return nullptr; },
-		    []() noexcept { return true; },
-		    [](std::uint32_t) noexcept -> void* { ++current->begins; return current; },
+		Descriptors()
+		{
+			current = this;
+		}
+		RmlDescriptorRegistrationApi api{1,
+		    sizeof(RmlDescriptorRegistrationApi),
+		    [](const char*) noexcept -> void* {
+			    return nullptr;
+		    },
+		    []() noexcept {
+			    return true;
+		    },
+		    [](std::uint32_t) noexcept -> void* {
+			    ++current->begins;
+			    return current;
+		    },
 		    [](void*, const RmlClassRegistrationV1* registration) noexcept {
 			    ++current->reserves;
-			    if (current->reject) return 1;
+			    if (current->reject)
+				    return 1;
 			    current->reserved = registration->descriptor;
 			    return 0;
 		    },
-		    [](void*) noexcept { ++current->aborts; current->reserved = nullptr; },
-		    [](void*) noexcept { ++current->commits; current->published = current->reserved; current->reserved = nullptr; }};
-		RmlGlobalInitContext context{1, nullptr, "fixture-studio", [](int, const char* message) noexcept {
-			++current->logs;
-			try { current->root = message; } catch (...) {}
-		}, &api};
+		    [](void*) noexcept {
+			    ++current->aborts;
+			    current->reserved = nullptr;
+		    },
+		    [](void*) noexcept {
+			    ++current->commits;
+			    current->published = current->reserved;
+			    current->reserved = nullptr;
+		    }};
+		RmlGlobalInitContext context{1,
+		    nullptr,
+		    "fixture-studio",
+		    [](int, const char* message) noexcept {
+			    ++current->logs;
+			    try
+			    {
+				    current->root = message;
+			    }
+			    catch (...)
+			    {
+			    }
+		    },
+		    &api};
 	};
 	struct Fixture
 	{
@@ -56,7 +92,10 @@ namespace
 			REQUIRE(reset != nullptr);
 			reset(mode);
 		}
-		~Fixture() { FreeLibrary(handle); }
+		~Fixture()
+		{
+			FreeLibrary(handle);
+		}
 		ModDefinition definition() const
 		{
 			return {"fixture", path.parent_path(), path, {}, "Fixture", 0, true, true, config::ModLoadPhase::GlobalInit};
@@ -66,8 +105,7 @@ namespace
 
 TEST_CASE("early mod registry preflights every mandatory export and ABI before entry")
 {
-	for (const auto* name : {"missing_start", "missing_uninstall", "missing_normal_abi", "missing_early_abi",
-	         "missing_early", "bad_normal_abi", "bad_early_abi", "normal_abi_seh", "early_abi_seh", "normal_abi_throw"})
+	for (const auto* name : {"missing_start", "missing_uninstall", "missing_normal_abi", "missing_early_abi", "missing_early", "bad_normal_abi", "bad_early_abi", "normal_abi_seh", "early_abi_seh", "normal_abi_throw"})
 	{
 		CAPTURE(name);
 		Fixture fixture(name);
@@ -132,10 +170,22 @@ TEST_CASE("early mod registry respects enabled phase and auto_load")
 	Descriptors descriptors;
 	EarlyModRegistry registry;
 	auto definition = fixture.definition();
-	SUBCASE("disabled") { definition.enabled = false; }
-	SUBCASE("manual") { definition.auto_load = false; }
-	SUBCASE("normal") { definition.load_phase = config::ModLoadPhase::Normal; }
-	SUBCASE("no native entry") { definition.native_entry.reset(); }
+	SUBCASE("disabled")
+	{
+		definition.enabled = false;
+	}
+	SUBCASE("manual")
+	{
+		definition.auto_load = false;
+	}
+	SUBCASE("normal")
+	{
+		definition.load_phase = config::ModLoadPhase::Normal;
+	}
+	SUBCASE("no native entry")
+	{
+		definition.native_entry.reset();
+	}
 	const std::array definitions{definition};
 	registry.attach_all(definitions, descriptors.context);
 	CHECK(registry.status(fixture.path) == EarlyModStatus::NotFound);
@@ -169,11 +219,26 @@ TEST_CASE("early mod registry rejects incompatible descriptor APIs before entry"
 {
 	Fixture fixture;
 	Descriptors descriptors;
-	SUBCASE("context ABI") { descriptors.context.abi_version = 2; }
-	SUBCASE("API version") { descriptors.api.version = 2; }
-	SUBCASE("short API") { descriptors.api.size = 8; }
-	SUBCASE("missing API") { descriptors.context.descriptors = nullptr; }
-	SUBCASE("missing callback") { descriptors.api.commit_batch = nullptr; }
+	SUBCASE("context ABI")
+	{
+		descriptors.context.abi_version = 2;
+	}
+	SUBCASE("API version")
+	{
+		descriptors.api.version = 2;
+	}
+	SUBCASE("short API")
+	{
+		descriptors.api.size = 8;
+	}
+	SUBCASE("missing API")
+	{
+		descriptors.context.descriptors = nullptr;
+	}
+	SUBCASE("missing callback")
+	{
+		descriptors.api.commit_batch = nullptr;
+	}
 	EarlyModRegistry registry;
 	const std::array definitions{fixture.definition()};
 	registry.attach_all(definitions, descriptors.context);

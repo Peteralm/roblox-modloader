@@ -20,7 +20,10 @@ namespace rml::platform::windows
 		[[nodiscard]] bool restore() noexcept;
 		[[nodiscard]] Target original_entry() const noexcept;
 		[[nodiscard]] Target trampoline() const noexcept;
-		[[nodiscard]] bool is_armed() const noexcept { return m_armed; }
+		[[nodiscard]] bool is_armed() const noexcept
+		{
+			return m_armed;
+		}
 
 	private:
 		std::byte* m_target{};

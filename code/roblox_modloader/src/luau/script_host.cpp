@@ -4,9 +4,9 @@
 #include "RobloxModLoader/luau/modules/module_resolver.hpp"
 #include "RobloxModLoader/luau/script_runtime.hpp"
 #include "RobloxModLoader/luau/vm/chunk.hpp"
+#include "RobloxModLoader/luau/vm/protected_call.hpp"
 #include "RobloxModLoader/luau/vm/stack_guard.hpp"
 #include "RobloxModLoader/luau/vm/thread_identity.hpp"
-#include "RobloxModLoader/luau/vm/protected_call.hpp"
 #include "RobloxModLoader/luau/vm/vm_api.hpp"
 #include "RobloxModLoader/roblox/data_model.hpp"
 #include "RobloxModLoader/roblox/security/script_permissions.hpp"
@@ -50,7 +50,12 @@ namespace rml::luau
 
 		auto* raw = thread->get();
 		if (const auto sandboxed = vm::protected_call(
-		        raw, [](lua_State* state, void*) { luaL_sandboxthread(state); }, nullptr, "rml_sandbox");
+		        raw,
+		        [](lua_State* state, void*) {
+			        luaL_sandboxthread(state);
+		        },
+		        nullptr,
+		        "rml_sandbox");
 		    !sandboxed)
 		{
 			RML_ERROR("Sandboxing the environment thread raised: {}", sandboxed.error());

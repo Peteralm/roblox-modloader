@@ -1,9 +1,9 @@
 #pragma once
 
-#include "mod/mod_catalog.hpp"
 #include "RobloxModLoader/memory/module.hpp"
 #include "RobloxModLoader/mod/global_init_mod.hpp"
 #include "RobloxModLoader/mod/mod_base.hpp"
+#include "mod/mod_catalog.hpp"
 
 #include <expected>
 #include <memory>
@@ -13,7 +13,13 @@
 
 namespace rml::native
 {
-	enum class EarlyModStatus { NotFound, Failed, Attached, Adopted };
+	enum class EarlyModStatus
+	{
+		NotFound,
+		Failed,
+		Attached,
+		Adopted
+	};
 
 	// Startup owns attach_all; normal loading consumes each successful attachment
 	// once. Failed entries are terminal and MUST NOT fall back to normal loading.

@@ -17,8 +17,9 @@
 #include <vector>
 
 namespace rml::jobs {
-    class RML_EXPORT JobManager final {
-    public:
+	class RML_EXPORT JobManager final
+	{
+	public:
         explicit JobManager(ITaskScheduler &task_scheduler);
 
         ~JobManager();
@@ -120,9 +121,9 @@ namespace rml::jobs {
         class PeriodicJob;
 
         ITaskScheduler &m_task_scheduler;
-    };
+	};
 
-    [[nodiscard]] RML_EXPORT JobManager &job_manager();
+	[[nodiscard]] RML_EXPORT JobManager &job_manager();
 
     [[nodiscard]] RML_EXPORT bool has_job_manager() noexcept;
 }

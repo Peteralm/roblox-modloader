@@ -1,11 +1,10 @@
 #include "RobloxModLoader/qt/qabstractbutton.hpp"
 
+#include "RobloxModLoader/memory/foreign_call.hpp"
 #include "RobloxModLoader/qt/qicon.hpp"
 #include "RobloxModLoader/qt/qstring.hpp"
 #include "RobloxModLoader/qt/qt_module.hpp"
 #include "qt_connect.hpp"
-
-#include "RobloxModLoader/memory/foreign_call.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -38,16 +37,14 @@ namespace rml::qt
 
 	void QAbstractButton::setIcon(const QIcon& icon)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, const void*)>(
-		    "QAbstractButton::setIcon(QIcon const&)");
+		static const auto fn = detail::widgets<void (*)(void*, const void*)>("QAbstractButton::setIcon(QIcon const&)");
 		if (fn)
 			fn(this, icon.data());
 	}
 
 	void QAbstractButton::setIconSize(const int width, const int height)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, const void*)>(
-		    "QAbstractButton::setIconSize(QSize const&)");
+		static const auto fn = detail::widgets<void (*)(void*, const void*)>("QAbstractButton::setIconSize(QSize const&)");
 		if (!fn)
 			return;
 		const std::int32_t size[2]{width, height};

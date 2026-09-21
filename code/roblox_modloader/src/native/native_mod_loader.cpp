@@ -39,7 +39,8 @@ namespace rml::native
 		if (m_early_registry.status(path) != EarlyModStatus::NotFound)
 		{
 			auto adoption = m_early_registry.adopt(path);
-			if (!adoption) return std::unexpected(adoption.error());
+			if (!adoption)
+				return std::unexpected(adoption.error());
 			module_ptr = std::move(adoption->module);
 			mod_root = std::move(adoption->root);
 			pinned = true;
@@ -74,17 +75,13 @@ namespace rml::native
 			if (!abi_version_h)
 			{
 				module_ptr->detach();
-				return std::unexpected(std::format(
-				    "Native mod '{}' does not export 'rml_abi_version' (expected RML_ABI_VERSION={}); rebuild it against the current RobloxModLoader SDK",
-				    path.string(), RML_ABI_VERSION));
+				return std::unexpected(std::format("Native mod '{}' does not export 'rml_abi_version' (expected RML_ABI_VERSION={}); rebuild it against the current RobloxModLoader SDK", path.string(), RML_ABI_VERSION));
 			}
 
 			if (const int mod_abi_version = abi_version_h.as<rml_abi_version_type>()(); mod_abi_version != RML_ABI_VERSION)
 			{
 				module_ptr->detach();
-				return std::unexpected(std::format(
-				    "Native mod '{}' was built against RML_ABI_VERSION={} but the loader is RML_ABI_VERSION={}; rebuild the mod",
-				    path.string(), mod_abi_version, RML_ABI_VERSION));
+				return std::unexpected(std::format("Native mod '{}' was built against RML_ABI_VERSION={} but the loader is RML_ABI_VERSION={}; rebuild the mod", path.string(), mod_abi_version, RML_ABI_VERSION));
 			}
 
 			start = start_h.as<start_fn_t>();
@@ -98,13 +95,15 @@ namespace rml::native
 		}
 		catch (...)
 		{
-			if (!pinned) module_ptr->detach();
+			if (!pinned)
+				module_ptr->detach();
 			return std::unexpected("Exception while calling 'start_mod' for: " + path.string());
 		}
 
 		if (!instance)
 		{
-			if (!pinned) module_ptr->detach();
+			if (!pinned)
+				module_ptr->detach();
 			return std::unexpected("start_mod returned null for: " + path.string());
 		}
 
@@ -118,13 +117,15 @@ namespace rml::native
 		catch (const std::exception& e)
 		{
 			uninstall(instance);
-			if (!pinned) module_ptr->detach();
+			if (!pinned)
+				module_ptr->detach();
 			return std::unexpected(std::format("Exception while calling 'on_load' for {}: {}", path.string(), e.what()));
 		}
 		catch (...)
 		{
 			uninstall(instance);
-			if (!pinned) module_ptr->detach();
+			if (!pinned)
+				module_ptr->detach();
 			return std::unexpected(std::format("Unknown exception while calling 'on_load' for {}", path.string()));
 		}
 

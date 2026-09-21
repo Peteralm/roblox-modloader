@@ -80,19 +80,15 @@ namespace rml::qt
 			const char* name{};
 			void* data{};
 		};
-		using InvokeMethod = bool (*)(void*, const char*, int, const GenericArgument*, const GenericArgument*,
-		    const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*,
-		    const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*);
-		static const auto fn = detail::core_optional<InvokeMethod>(
-		    "QMetaObject::invokeMethod(QObject*, char const*, Qt::ConnectionType, QGenericArgument, "
-		    "QGenericArgument, QGenericArgument, QGenericArgument, QGenericArgument, QGenericArgument, "
-		    "QGenericArgument, QGenericArgument, QGenericArgument, QGenericArgument)");
+		using InvokeMethod = bool (*)(void*, const char*, int, const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*, const GenericArgument*);
+		static const auto fn = detail::core_optional<InvokeMethod>("QMetaObject::invokeMethod(QObject*, char const*, Qt::ConnectionType, QGenericArgument, "
+		                                                           "QGenericArgument, QGenericArgument, QGenericArgument, QGenericArgument, QGenericArgument, "
+		                                                           "QGenericArgument, QGenericArgument, QGenericArgument, QGenericArgument)");
 		if (!fn || !member)
 			return false;
 		static constexpr GenericArgument kEmpty{};
 		// Qt::QueuedConnection == 2: the call is delivered by the receiver's own
 		// event loop, which is exactly the thread hop this is for.
-		return fn(this, member, 2, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty,
-		    &kEmpty, &kEmpty);
+		return fn(this, member, 2, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty, &kEmpty);
 	}
 }

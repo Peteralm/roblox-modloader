@@ -18,7 +18,8 @@ namespace rml::native
 	{
 	public:
 		explicit NativeModLoader(events::EventManager& event_manager, EarlyModRegistry& early_registry = EarlyModRegistry::instance()) :
-		    m_event_manager(event_manager), m_early_registry(early_registry)
+		    m_event_manager(event_manager),
+		    m_early_registry(early_registry)
 		{
 		}
 		~NativeModLoader() override;

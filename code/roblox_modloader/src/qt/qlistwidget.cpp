@@ -25,8 +25,7 @@ namespace rml::qt
 
 	void QListWidget::add_item(const std::string_view text)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, const void*)>(
-		    "QListWidget::addItem(QString const&)");
+		static const auto fn = detail::widgets<void (*)(void*, const void*)>("QListWidget::addItem(QString const&)");
 		if (!fn)
 			return;
 		const QString value(text);

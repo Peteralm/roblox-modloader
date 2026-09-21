@@ -1,12 +1,12 @@
 #include "mod_manager.hpp"
-#include "mod_catalog.hpp"
 
 #include "RobloxModLoader/internal/common.hpp"
 #include "dotnet/dotnet_mod_loader.hpp"
-#include "native/native_mod_loader.hpp"
 #include "filesystem/directory.hpp"
+#include "mod_catalog.hpp"
+#include "native/native_mod_loader.hpp"
 #if defined(RML_WINDOWS)
-#include "core/early_bootstrap.hpp"
+	#include "core/early_bootstrap.hpp"
 #endif
 
 #include <algorithm>
@@ -48,8 +48,7 @@ namespace rml
 		    native == m_loaders.end() ? nullptr : native->second.get(),
 		    dotnet == m_loaders.end() ? nullptr : dotnet->second.get());
 #if defined(RML_WINDOWS)
-		const bool global_init_completed =
-		    platform::windows::EarlyBootstrap::state() == platform::windows::BootstrapState::Completed;
+		const bool global_init_completed = platform::windows::EarlyBootstrap::state() == platform::windows::BootstrapState::Completed;
 		for (const auto& mod : catalog.mods)
 		{
 			if (!mod.enabled || !mod.auto_load || mod.load_phase != config::ModLoadPhase::GlobalInit)
@@ -61,7 +60,7 @@ namespace rml
 			}
 			const auto load_entry = [&errors](IModLoader* loader, const std::filesystem::path& path) {
 				if (!loader)
-				errors.push_back("No loader registered for " + path.string());
+					errors.push_back("No loader registered for " + path.string());
 				else if (const auto loaded = loader->load(path); !loaded)
 					errors.push_back("Failed to load " + path.string() + ": " + loaded.error());
 			};

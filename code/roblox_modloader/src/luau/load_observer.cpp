@@ -42,8 +42,7 @@ namespace rml::luau
 
 	namespace detail
 	{
-		void dispatch_load(lua_State* state, const char* chunk_name, const char* source,
-		    const std::size_t source_size, const int environment, const LoadPhase phase, const int status) noexcept
+		void dispatch_load(lua_State* state, const char* chunk_name, const char* source, const std::size_t source_size, const int environment, const LoadPhase phase, const int status) noexcept
 		{
 			for (const auto& slot : s_observers)
 				if (const auto observer = slot.load(std::memory_order_acquire))

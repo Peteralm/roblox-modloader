@@ -18,8 +18,7 @@ namespace rml::qt
 
 	QTreeWidgetItem* QTreeWidgetItem::create()
 	{
-		static const auto construct = detail::widgets<void* (*)(void*, int)>(
-		    "QTreeWidgetItem::QTreeWidgetItem(int)");
+		static const auto construct = detail::widgets<void* (*)(void*, int)>("QTreeWidgetItem::QTreeWidgetItem(int)");
 		return detail::heap_construct<QTreeWidgetItem>(detail::WIDGET_INSTANCE_SIZE, construct, kNoItemType);
 	}
 
@@ -31,8 +30,7 @@ namespace rml::qt
 
 	void QTreeWidgetItem::set_text(const int column, const std::string_view text)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, int, const void*)>(
-		    "QTreeWidgetItem::setText(int, QString const&)");
+		static const auto fn = detail::widgets<void (*)(void*, int, const void*)>("QTreeWidgetItem::setText(int, QString const&)");
 		if (!fn)
 			return;
 		const QString value(text);
@@ -41,8 +39,7 @@ namespace rml::qt
 
 	void QTreeWidgetItem::set_tool_tip(const int column, const std::string_view text)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, int, const void*)>(
-		    "QTreeWidgetItem::setToolTip(int, QString const&)");
+		static const auto fn = detail::widgets<void (*)(void*, int, const void*)>("QTreeWidgetItem::setToolTip(int, QString const&)");
 		if (!fn)
 			return;
 		const QString value(text);
@@ -51,8 +48,7 @@ namespace rml::qt
 
 	QTreeWidget* QTreeWidget::create(QWidget* parent)
 	{
-		static const auto construct = detail::widgets<void* (*)(void*, void*)>(
-		    "QTreeWidget::QTreeWidget(QWidget*)");
+		static const auto construct = detail::widgets<void* (*)(void*, void*)>("QTreeWidget::QTreeWidget(QWidget*)");
 		return detail::heap_construct<QTreeWidget>(detail::WIDGET_INSTANCE_SIZE, construct, parent);
 	}
 
@@ -76,16 +72,14 @@ namespace rml::qt
 
 	void QTreeWidget::set_header_item(QTreeWidgetItem* item)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, void*)>(
-		    "QTreeWidget::setHeaderItem(QTreeWidgetItem*)");
+		static const auto fn = detail::widgets<void (*)(void*, void*)>("QTreeWidget::setHeaderItem(QTreeWidgetItem*)");
 		if (fn && item)
 			fn(this, item);
 	}
 
 	void QTreeWidget::add_item(QTreeWidgetItem* item)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, void*)>(
-		    "QTreeWidget::addTopLevelItem(QTreeWidgetItem*)");
+		static const auto fn = detail::widgets<void (*)(void*, void*)>("QTreeWidget::addTopLevelItem(QTreeWidgetItem*)");
 		if (fn && item)
 			fn(this, item);
 	}
@@ -106,8 +100,7 @@ namespace rml::qt
 
 	void QTreeWidget::set_alternating_row_colors(const bool alternating)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, bool)>(
-		    "QAbstractItemView::setAlternatingRowColors(bool)");
+		static const auto fn = detail::widgets<void (*)(void*, bool)>("QAbstractItemView::setAlternatingRowColors(bool)");
 		if (fn)
 			fn(this, alternating);
 	}
@@ -121,8 +114,7 @@ namespace rml::qt
 
 	void QTreeWidget::set_selects_whole_row(const bool whole_row)
 	{
-		static const auto fn = detail::widgets<void (*)(void*, int)>(
-		    "QAbstractItemView::setSelectionBehavior(QAbstractItemView::SelectionBehavior)");
+		static const auto fn = detail::widgets<void (*)(void*, int)>("QAbstractItemView::setSelectionBehavior(QAbstractItemView::SelectionBehavior)");
 		if (fn)
 			fn(this, whole_row ? kSelectRows : 0);
 	}
@@ -137,8 +129,7 @@ namespace rml::qt
 	void QTreeWidget::stretch_last_column(const bool stretch)
 	{
 		static const auto header = detail::widgets<void* (*)(const void*)>("QTreeView::header() const");
-		static const auto fn = detail::widgets<void (*)(void*, bool)>(
-		    "QHeaderView::setStretchLastSection(bool)");
+		static const auto fn = detail::widgets<void (*)(void*, bool)>("QHeaderView::setStretchLastSection(bool)");
 		if (!header || !fn)
 			return;
 		if (auto* view = header(this))
@@ -147,10 +138,8 @@ namespace rml::qt
 
 	int QTreeWidget::current_row() const
 	{
-		static const auto current = detail::widgets<void* (*)(const void*)>(
-		    "QTreeWidget::currentItem() const");
-		static const auto index_of = detail::widgets<int (*)(const void*, void*)>(
-		    "QTreeWidget::indexOfTopLevelItem(QTreeWidgetItem*) const");
+		static const auto current = detail::widgets<void* (*)(const void*)>("QTreeWidget::currentItem() const");
+		static const auto index_of = detail::widgets<int (*)(const void*, void*)>("QTreeWidget::indexOfTopLevelItem(QTreeWidgetItem*) const");
 		if (!current || !index_of)
 			return -1;
 		auto* item = current(this);
@@ -159,10 +148,8 @@ namespace rml::qt
 
 	void QTreeWidget::set_current_row(const int row)
 	{
-		static const auto top_level = detail::widgets<void* (*)(const void*, int)>(
-		    "QTreeWidget::topLevelItem(int) const");
-		static const auto set_current = detail::widgets<void (*)(void*, void*)>(
-		    "QTreeWidget::setCurrentItem(QTreeWidgetItem*)");
+		static const auto top_level = detail::widgets<void* (*)(const void*, int)>("QTreeWidget::topLevelItem(int) const");
+		static const auto set_current = detail::widgets<void (*)(void*, void*)>("QTreeWidget::setCurrentItem(QTreeWidgetItem*)");
 		if (!top_level || !set_current)
 			return;
 		if (auto* item = top_level(this, row))
@@ -171,8 +158,7 @@ namespace rml::qt
 
 	QTreeWidgetItem* QTreeWidget::item(const int row) const
 	{
-		static const auto fn = detail::widgets<void* (*)(const void*, int)>(
-		    "QTreeWidget::topLevelItem(int) const");
+		static const auto fn = detail::widgets<void* (*)(const void*, int)>("QTreeWidget::topLevelItem(int) const");
 		return fn ? static_cast<QTreeWidgetItem*>(fn(this, row)) : nullptr;
 	}
 
@@ -194,8 +180,7 @@ namespace rml::qt
 
 	void QTreeWidget::on_current_row_changed(std::function<void(int)> handler) const
 	{
-		static void* const signal = detail::widgets_export(
-		    "QTreeWidget::currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)");
+		static void* const signal = detail::widgets_export("QTreeWidget::currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)");
 		static const void* const meta = detail::widgets_export("QTreeWidget::staticMetaObject");
 		detail::connect_function(this, signal, meta, [this, handler = std::move(handler)](void**) {
 			if (handler)

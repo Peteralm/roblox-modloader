@@ -1,8 +1,8 @@
 #include "RobloxModLoader/luau/env/binding.hpp"
 
 #include "RobloxModLoader/luau/script_host.hpp"
-#include "RobloxModLoader/luau/vm/stack_guard.hpp"
 #include "RobloxModLoader/luau/vm/protected_call.hpp"
+#include "RobloxModLoader/luau/vm/stack_guard.hpp"
 
 #include <cstring>
 
@@ -176,12 +176,12 @@ namespace rml::luau
 				    auto* pending = static_cast<BinderCall*>(ctx);
 				    pending->ok = pending->bind(*pending->env, state);
 			    },
-			    &call, "rml_bind");
+			    &call,
+			    "rml_bind");
 
 			if (!bound)
 			{
-				RML_ERROR("Binding the '{}' global for mod '{}' raised: {}", name, env.mod().mod_name(),
-				          bound.error());
+				RML_ERROR("Binding the '{}' global for mod '{}' raised: {}", name, env.mod().mod_name(), bound.error());
 				all_bound = false;
 			}
 			else if (!call.ok)

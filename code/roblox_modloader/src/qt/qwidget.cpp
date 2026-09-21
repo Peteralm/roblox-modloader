@@ -18,8 +18,7 @@ namespace rml::qt
 
 	QWidget* QWidget::create(QWidget* parent)
 	{
-		static const auto construct = detail::widgets<void* (*)(void*, void*, int)>(
-		    "QWidget::QWidget(QWidget*, QFlags<Qt::WindowType>)");
+		static const auto construct = detail::widgets<void* (*)(void*, void*, int)>("QWidget::QWidget(QWidget*, QFlags<Qt::WindowType>)");
 		return detail::heap_construct<QWidget>(detail::WIDGET_INSTANCE_SIZE, construct, parent, 0);
 	}
 

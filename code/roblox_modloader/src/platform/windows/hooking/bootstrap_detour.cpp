@@ -9,8 +9,7 @@ namespace rml::platform::windows
 	{
 		void write_absolute_jump(std::byte* destination, const void* target) noexcept
 		{
-			const std::array prefix{std::byte{0xFF}, std::byte{0x25}, std::byte{0x00}, std::byte{0x00},
-			    std::byte{0x00}, std::byte{0x00}};
+			const std::array prefix{std::byte{0xFF}, std::byte{0x25}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00}};
 			std::memcpy(destination, prefix.data(), prefix.size());
 			std::memcpy(destination + prefix.size(), &target, sizeof(target));
 		}
@@ -37,8 +36,7 @@ namespace rml::platform::windows
 		std::memcpy(m_original.data(), m_target, m_original.size());
 
 		constexpr auto trampoline_size = kPatchSize + kPatchSize;
-		m_trampoline = static_cast<std::byte*>(VirtualAlloc(
-		    nullptr, trampoline_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+		m_trampoline = static_cast<std::byte*>(VirtualAlloc(nullptr, trampoline_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
 		if (!m_trampoline)
 			return false;
 		std::memcpy(m_trampoline, m_original.data(), m_original.size());

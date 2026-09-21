@@ -61,21 +61,29 @@ inline bool rml_valid_class_registration(const RmlClassRegistrationV1* value) no
 
 inline bool rml_valid_descriptor_api(const RmlDescriptorRegistrationApi* value) noexcept
 {
-	return value && value->version == RML_DESCRIPTOR_REGISTRATION_API_VERSION
-	    && value->size >= sizeof(RmlDescriptorRegistrationApi)
-	    && value->find_class && value->registry_is_mutable && value->begin_batch
-	    && value->reserve_class && value->abort_batch && value->commit_batch;
+	return value && value->version == RML_DESCRIPTOR_REGISTRATION_API_VERSION && value->size >= sizeof(RmlDescriptorRegistrationApi)
+	    && value->find_class && value->registry_is_mutable && value->begin_batch && value->reserve_class && value->abort_batch
+	    && value->commit_batch;
 }
 
 // Official mods still export start_mod, uninstall_mod and rml_abi_version.
 // Both early exports MUST catch (...) internally: the ABI query returns 0 on
 // failure; early entry returns nonzero. No C++ exception may cross either ABI.
 #if defined(_WIN32)
-#define RML_GLOBAL_INIT_EXPORT __declspec(dllexport)
+	#define RML_GLOBAL_INIT_EXPORT __declspec(dllexport)
 #else
-#define RML_GLOBAL_INIT_EXPORT __attribute__((visibility("default")))
+	#define RML_GLOBAL_INIT_EXPORT __attribute__((visibility("default")))
 #endif
 
-#define RML_EXPORT_GLOBAL_INIT_ABI_VERSION() \
+#define RML_EXPORT_GLOBAL_INIT_ABI_VERSION()                                               \
 	extern "C" RML_GLOBAL_INIT_EXPORT std::uint32_t rml_global_init_abi_version() noexcept \
-	{ try { return RML_GLOBAL_INIT_ABI_VERSION; } catch (...) { return 0; } }
+	{                                                                                      \
+		try                                                                                \
+		{                                                                                  \
+			return RML_GLOBAL_INIT_ABI_VERSION;                                            \
+		}                                                                                  \
+		catch (...)                                                                        \
+		{                                                                                  \
+			return 0;                                                                      \
+		}                                                                                  \
+	}

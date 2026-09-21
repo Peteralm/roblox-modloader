@@ -6,8 +6,7 @@ namespace rml::qt
 {
 	QToolButton* QToolButton::create(QWidget* parent)
 	{
-		static const auto construct = detail::widgets<void* (*)(void*, void*)>(
-		    "QToolButton::QToolButton(QWidget*)");
+		static const auto construct = detail::widgets<void* (*)(void*, void*)>("QToolButton::QToolButton(QWidget*)");
 		return detail::heap_construct<QToolButton>(detail::WIDGET_INSTANCE_SIZE, construct, parent);
 	}
 

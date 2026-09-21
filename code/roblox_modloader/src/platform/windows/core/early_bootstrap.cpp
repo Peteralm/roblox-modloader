@@ -1,23 +1,22 @@
 #include "early_bootstrap.hpp"
 
-#include "platform/windows/hooking/bootstrap_detour.hpp"
+#include "RobloxModLoader/mod/global_init_mod.hpp"
+#include "generated/bootstrap_profile.hpp"
 #include "mod/mod_catalog.hpp"
 #include "native/early_mod_registry.hpp"
-#include "RobloxModLoader/mod/global_init_mod.hpp"
+#include "platform/windows/hooking/bootstrap_detour.hpp"
 
 #include <Windows.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <cwchar>
 #include <filesystem>
 #include <limits>
-#include <cwchar>
 #include <new>
 #include <string>
 #include <string_view>
-
-#include "generated/bootstrap_profile.hpp"
 
 namespace rml::platform::windows
 {
@@ -102,8 +101,7 @@ namespace rml::platform::windows
 			for (std::uint16_t index = 0; index < nt->FileHeader.NumberOfSections; ++index)
 			{
 				const auto section_size = std::max(section[index].Misc.VirtualSize, section[index].SizeOfRawData);
-				if ((section[index].Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0
-				    && rva >= section[index].VirtualAddress
+				if ((section[index].Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0 && rva >= section[index].VirtualAddress
 				    && rva - section[index].VirtualAddress <= section_size
 				    && length <= section_size - (rva - section[index].VirtualAddress))
 					return true;
@@ -116,16 +114,14 @@ namespace rml::platform::windows
 			if (!descriptor)
 				return {};
 			// Descriptor stores `const Name& name` at +8; the Name object begins with its std::string.
-			const auto* value = *reinterpret_cast<const std::byte* const*>(
-			    static_cast<const std::byte*>(descriptor) + 8);
+			const auto* value = *reinterpret_cast<const std::byte* const*>(static_cast<const std::byte*>(descriptor) + 8);
 			if (!value)
 				return {};
 			const auto size = *reinterpret_cast<const std::size_t*>(value + 16);
 			const auto capacity = *reinterpret_cast<const std::size_t*>(value + 24);
 			if (size > capacity || size > 4096)
 				return {};
-			const char* text = capacity < 16 ? reinterpret_cast<const char*>(value)
-			                                 : *reinterpret_cast<const char* const*>(value);
+			const char* text = capacity < 16 ? reinterpret_cast<const char*>(value) : *reinterpret_cast<const char* const*>(value);
 			return text ? std::string_view{text, size} : std::string_view{};
 		}
 
@@ -135,8 +131,8 @@ namespace rml::platform::windows
 				return false;
 			if (!registry->begin && !registry->end && !registry->capacity)
 				return true;
-			return registry->begin && registry->end && registry->capacity
-			    && registry->begin <= registry->end && registry->end <= registry->capacity;
+			return registry->begin && registry->end && registry->capacity && registry->begin <= registry->end
+			    && registry->end <= registry->capacity;
 		}
 
 		void* find_class(const char* name) noexcept
@@ -152,8 +148,7 @@ namespace rml::platform::windows
 
 		bool registry_is_mutable() noexcept
 		{
-			return s_registry && s_registry_frozen && s_class_count && *s_registry_frozen == 0
-			    && registry_shape_valid(s_registry);
+			return s_registry && s_registry_frozen && s_class_count && *s_registry_frozen == 0 && registry_shape_valid(s_registry);
 		}
 
 		void release_batch(DescriptorBatch* batch, const bool keep_storage) noexcept
@@ -197,8 +192,9 @@ namespace rml::platform::windows
 			const auto required = batch->old_size + class_count;
 			if (required > batch->old_capacity)
 			{
-				const auto grown = batch->old_capacity > (std::numeric_limits<std::size_t>::max() / 2)
-				    ? required : std::max(required, std::max<std::size_t>(8, batch->old_capacity * 2));
+				const auto grown = batch->old_capacity > (std::numeric_limits<std::size_t>::max() / 2) ?
+				    required :
+				    std::max(required, std::max<std::size_t>(8, batch->old_capacity * 2));
 				if (grown > std::numeric_limits<std::size_t>::max() / sizeof(void*))
 				{
 					release_batch(batch, false);
@@ -228,8 +224,8 @@ namespace rml::platform::windows
 			auto* batch = static_cast<DescriptorBatch*>(handle);
 			if (!batch || batch != s_active_batch || !rml_valid_class_registration(registration)
 			    || batch->reserved >= batch->limit || !registration->class_name || !registration->base_class_name
-			    || !registration->descriptor || !registration->factory
-			    || (registration->member_count && !registration->members) || registration->flags != 0)
+			    || !registration->descriptor || !registration->factory || (registration->member_count && !registration->members)
+			    || registration->flags != 0)
 				return 1;
 
 			const std::string_view class_name{registration->class_name};
@@ -248,8 +244,7 @@ namespace rml::platform::windows
 			if (!base_found)
 				return 4;
 
-			batch->pending[batch->reserved] = {
-			    registration->class_name, registration->base_class_name, registration->descriptor};
+			batch->pending[batch->reserved] = {registration->class_name, registration->base_class_name, registration->descriptor};
 			batch->storage[batch->old_size + batch->reserved] = const_cast<void*>(registration->descriptor);
 			++batch->reserved;
 			return 0;
@@ -293,9 +288,7 @@ namespace rml::platform::windows
 			release_batch(batch, true);
 		}
 
-		constexpr RmlDescriptorRegistrationApi kDescriptorApi{RML_DESCRIPTOR_REGISTRATION_API_VERSION,
-		    sizeof(RmlDescriptorRegistrationApi), find_class, registry_is_mutable, begin_batch,
-		    reserve_class, abort_batch, commit_batch};
+		constexpr RmlDescriptorRegistrationApi kDescriptorApi{RML_DESCRIPTOR_REGISTRATION_API_VERSION, sizeof(RmlDescriptorRegistrationApi), find_class, registry_is_mutable, begin_batch, reserve_class, abort_batch, commit_batch};
 
 		void initialize_log_path() noexcept
 		{
@@ -325,8 +318,7 @@ namespace rml::platform::windows
 			OutputDebugStringA("\n");
 			if (!s_log_path[0])
 				return;
-			const HANDLE file = CreateFileW(s_log_path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-			    nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+			const HANDLE file = CreateFileW(s_log_path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 			if (file == INVALID_HANDLE_VALUE)
 				return;
 			const char prefixes[][8] = {"TRACE ", "INFO  ", "WARN  ", "ERROR ", "FATAL "};
@@ -368,8 +360,7 @@ namespace rml::platform::windows
 					const auto text = "Skipping invalid early mod metadata '" + error.source.string() + "': " + error.message;
 					early_log(3, text.c_str());
 				}
-				const RmlGlobalInitContext context{RML_GLOBAL_INIT_ABI_VERSION, nullptr,
-				    s_window.profile->build, early_log, &kDescriptorApi};
+				const RmlGlobalInitContext context{RML_GLOBAL_INIT_ABI_VERSION, nullptr, s_window.profile->build, early_log, &kDescriptorApi};
 				native::EarlyModRegistry::instance().attach_all(catalog.mods, context);
 			}
 			catch (...)
@@ -384,8 +375,7 @@ namespace rml::platform::windows
 		}
 	}
 
-	std::expected<ResolvedGlobalInitWindow, ResolveError> resolve_global_init_window(
-	    void* host_module, const std::span<const EmbeddedBootstrapProfile> profiles) noexcept
+	std::expected<ResolvedGlobalInitWindow, ResolveError> resolve_global_init_window(void* host_module, const std::span<const EmbeddedBootstrapProfile> profiles) noexcept
 	{
 		if (!host_module)
 			return std::unexpected(ResolveError::InvalidImage);
@@ -410,13 +400,11 @@ namespace rml::platform::windows
 		    || !rva_fits(profile->registry_vector_rva, sizeof(EngineVector), profile->size_of_image)
 		    || !rva_fits(profile->registry_frozen_rva, 1, profile->size_of_image)
 		    || !rva_fits(profile->class_count_rva, sizeof(std::uint32_t), profile->size_of_image)
-		    || !is_executable_rva(nt, profile->window_rva, profile->signature_size)
-		    || !is_executable_rva(nt, profile->engine_allocate_rva, 1)
+		    || !is_executable_rva(nt, profile->window_rva, profile->signature_size) || !is_executable_rva(nt, profile->engine_allocate_rva, 1)
 		    || !is_executable_rva(nt, profile->engine_free_rva, 1))
 			return std::unexpected(ResolveError::InvalidShape);
 
-		constexpr std::array<std::uint8_t, BootstrapDetour::kPatchSize> expected_prologue{
-		    0x48, 0x89, 0x5C, 0x24, 0x20, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56};
+		constexpr std::array<std::uint8_t, BootstrapDetour::kPatchSize> expected_prologue{0x48, 0x89, 0x5C, 0x24, 0x20, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56};
 		if (!std::equal(expected_prologue.begin(), expected_prologue.end(), profile->signature))
 			return std::unexpected(ResolveError::InvalidShape);
 
@@ -435,8 +423,7 @@ namespace rml::platform::windows
 			if (section_size < profile->signature_size)
 				continue;
 			for (std::size_t offset = 0; offset <= section_size - profile->signature_size; ++offset)
-				if (std::memcmp(host + section[index].VirtualAddress + offset,
-				        profile->signature, profile->signature_size) == 0)
+				if (std::memcmp(host + section[index].VirtualAddress + offset, profile->signature, profile->signature_size) == 0)
 					++matches;
 		}
 		if (!matches)
@@ -461,8 +448,7 @@ namespace rml::platform::windows
 		}
 		s_window = *resolved;
 		configure_engine_backend(s_window);
-		if (!s_detour.arm(s_window.target, reinterpret_cast<void*>(&global_init_bootstrap_thunk),
-		        s_window.profile->overwrite_size))
+		if (!s_detour.arm(s_window.target, reinterpret_cast<void*>(&global_init_bootstrap_thunk), s_window.profile->overwrite_size))
 		{
 			set_diagnostic("failed to arm global-init bootstrap detour");
 			s_state.store(BootstrapState::Failed, std::memory_order_release);

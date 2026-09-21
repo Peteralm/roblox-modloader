@@ -1,9 +1,9 @@
 #include "RobloxModLoader/qt/qaction.hpp"
 
-#include "RobloxModLoader/qt/qicon.hpp"
-#include "RobloxModLoader/qt/qt_module.hpp"
 #include "RobloxModLoader/memory/foreign_call.hpp"
+#include "RobloxModLoader/qt/qicon.hpp"
 #include "RobloxModLoader/qt/qstring.hpp"
+#include "RobloxModLoader/qt/qt_module.hpp"
 
 #include <cstring>
 

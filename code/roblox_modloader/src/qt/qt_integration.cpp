@@ -1,8 +1,8 @@
 #include "RobloxModLoader/qt/qt_integration.hpp"
 
+#include "RobloxModLoader/logger/logger.hpp"
 #include "RobloxModLoader/qt/qapplication.hpp"
 #include "RobloxModLoader/qt/qwidget.hpp"
-#include "RobloxModLoader/logger/logger.hpp"
 
 RML_LOG_SCOPE("QtIntegration")
 

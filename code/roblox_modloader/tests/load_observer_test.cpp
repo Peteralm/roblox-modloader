@@ -1,9 +1,8 @@
-#include <doctest/doctest.h>
-
 #include "RobloxModLoader/luau/load_observer.hpp"
 
 #include <array>
 #include <cstddef>
+#include <doctest/doctest.h>
 
 namespace rml::luau
 {
@@ -21,10 +20,7 @@ namespace rml::luau
 			s_status = status;
 		}
 
-		constexpr std::array<LoadObserver, 17> kObservers{
-		    observer<0>, observer<1>, observer<2>, observer<3>, observer<4>, observer<5>, observer<6>, observer<7>,
-		    observer<8>, observer<9>, observer<10>, observer<11>, observer<12>, observer<13>, observer<14>, observer<15>,
-		    observer<16>};
+		constexpr std::array<LoadObserver, 17> kObservers{observer<0>, observer<1>, observer<2>, observer<3>, observer<4>, observer<5>, observer<6>, observer<7>, observer<8>, observer<9>, observer<10>, observer<11>, observer<12>, observer<13>, observer<14>, observer<15>, observer<16>};
 	}
 
 	TEST_CASE("Luau load observers dispatch fixed bounded callbacks")

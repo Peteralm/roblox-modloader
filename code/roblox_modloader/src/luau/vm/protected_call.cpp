@@ -33,8 +33,7 @@ namespace rml::luau::vm
 		}
 	}
 
-	std::expected<void, std::string> protected_call(lua_State* L, const ProtectedFn fn, void* ctx,
-	                                                const char* debug_name) noexcept
+	std::expected<void, std::string> protected_call(lua_State* L, const ProtectedFn fn, void* ctx, const char* debug_name) noexcept
 	{
 		if (L == nullptr || fn == nullptr)
 		{

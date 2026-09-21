@@ -1,10 +1,9 @@
 #pragma once
-#include "mod_catalog.hpp"
-
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/mod/events.hpp"
 #include "RobloxModLoader/mod/mod_base.hpp"
 #include "imod_loader.hpp"
+#include "mod_catalog.hpp"
 #include "mod_kind.hpp"
 
 namespace RBX
@@ -53,8 +52,7 @@ namespace rml
 
 		[[nodiscard]] std::expected<void, ModManagerError> load_directory(const std::filesystem::path& directory) const;
 		void load_catalog(const ModCatalogResult& catalog) const;
-		[[nodiscard]] static std::vector<std::string> load_catalog(
-		    const ModCatalogResult& catalog, IModLoader* native_loader, IModLoader* dotnet_loader);
+		[[nodiscard]] static std::vector<std::string> load_catalog(const ModCatalogResult& catalog, IModLoader* native_loader, IModLoader* dotnet_loader);
 		[[nodiscard]] std::expected<void, std::string> load(const std::filesystem::path& path) const;
 		[[nodiscard]] std::expected<void, std::string> unload(const std::filesystem::path& path) const;
 		[[nodiscard]] std::expected<void, std::string> reload(const std::filesystem::path& path) const;
@@ -68,8 +66,7 @@ namespace rml
 		std::unordered_map<ModKind, std::unique_ptr<IModLoader>> m_loaders;
 	};
 
-	inline std::vector<std::string> ModManager::load_catalog(
-	    const ModCatalogResult& catalog, IModLoader* native_loader, IModLoader* dotnet_loader)
+	inline std::vector<std::string> ModManager::load_catalog(const ModCatalogResult& catalog, IModLoader* native_loader, IModLoader* dotnet_loader)
 	{
 		std::vector<std::string> errors;
 		const auto load_entry = [&errors](IModLoader* loader, const std::filesystem::path& path) {
