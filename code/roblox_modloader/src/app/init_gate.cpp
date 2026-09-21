@@ -4,7 +4,10 @@
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/internal/hooking/engine_hooks.hpp"
 #include "RobloxModLoader/mod/init_context.hpp"
+#include "RobloxModLoader/memory/all.hpp"
+#include "RobloxModLoader/platform/memory/host_image.hpp"
 #include "config/config_manager.hpp"
+#include "memory/engine_signatures.hpp"
 #include "pointers.hpp"
 
 RML_LOG_SCOPE("InitGate");
@@ -29,9 +32,29 @@ namespace rml
 		return g_init_gate;
 	}
 
+	static void* find_global_init()
+	{
+		if (g_pointers && g_pointers->m_roblox_pointers.global_init)
+			return reinterpret_cast<void*>(g_pointers->m_roblox_pointers.global_init);
+
+		const auto [batch, hash] = Pointers::get_roblox_batch();
+		for (const auto& entry : batch.m_entries)
+		{
+			if (std::string_view(entry.m_name.str) != "RBX_GLOBAL_INIT")
+				continue;
+
+			const memory::module image(platform::studio_image_name());
+			const auto started = std::chrono::steady_clock::now();
+			const auto hit = image.scan(memory::pattern(std::string_view(entry.m_ida.str)));
+			RML_INFO("RBX_GLOBAL_INIT scanned alone in {} ms", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+			return hit ? hit->as<void*>() : nullptr;
+		}
+		return nullptr;
+	}
+
 	std::expected<void, std::string> InitGate::install()
 	{
-		const auto target = g_pointers ? g_pointers->m_roblox_pointers.global_init : nullptr;
+		const auto target = find_global_init();
 		if (!target)
 		{
 			m_latch.mark_missed();

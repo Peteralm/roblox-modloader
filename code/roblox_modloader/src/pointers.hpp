@@ -13,9 +13,10 @@ namespace rml
 {
 	class Pointers
 	{
-	private:
+	public:
 		static constexpr auto get_roblox_batch();
 
+	private:
 		template<cstxpr_str batch_name, size_t N>
 		void run_batch(const memory::batch<N>& batch, const std::uint32_t sigset_hash, const memory::module& mem_region)
 		{
