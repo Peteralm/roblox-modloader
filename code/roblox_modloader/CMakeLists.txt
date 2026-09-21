@@ -259,3 +259,7 @@ if (APPLE AND TARGET roblox_modloader AND DEFINED ENV{ROBLOX_STUDIO_PATH} AND NO
     unset(_rml_macos_dir)
     unset(_rml_deployed_dylib)
 endif ()
+
+if (RML_BUILD_TESTS)
+    add_subdirectory(tests)
+endif ()
