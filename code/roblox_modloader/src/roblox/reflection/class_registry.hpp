@@ -10,6 +10,7 @@
 #include <expected>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -112,6 +113,7 @@ namespace rml::reflection
 		static ClassRegistry& instance();
 
 		[[nodiscard]] static bool available();
+		[[nodiscard]] std::expected<void, std::string> validate();
 		[[nodiscard]] std::expected<RBX::Reflection::ClassDescriptor*, std::string> define(const ClassSpec& spec);
 		[[nodiscard]] std::expected<RBX::Reflection::ClassDescriptor*, std::string> extend(const ExtensionSpec& spec);
 		[[nodiscard]] const RBX::ICreator* creator_for(const RBX::Name* name) const;
@@ -122,6 +124,7 @@ namespace rml::reflection
 	private:
 		std::deque<RegisteredClass> m_classes;
 		std::deque<RegisteredExtension> m_extensions;
+		std::optional<std::expected<void, std::string>> m_validation;
 		std::unordered_map<const RBX::Name*, const RBX::ICreator*> m_creators;
 		std::unordered_map<const RBX::Reflection::ClassDescriptor*, RegisteredClass*> m_by_descriptor;
 	};

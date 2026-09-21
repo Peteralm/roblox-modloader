@@ -4,6 +4,9 @@
 
 #include "RobloxModLoader/memory/foreign_call.hpp"
 #include "RobloxModLoader/memory/i_rtti_provider.hpp"
+#include "RobloxModLoader/memory/module.hpp"
+#include "RobloxModLoader/platform/memory/host_image.hpp"
+#include "RobloxModLoader/roblox/reflection/described_creatable.hpp"
 #include "RobloxModLoader/mod/init_context.hpp"
 #include "RobloxModLoader/roblox/reflection/array_view.hpp"
 #include "app/init_gate.hpp"
@@ -109,6 +112,66 @@ namespace rml::reflection
 		return p.class_descriptor_ctor && p.class_descriptor_all_classes && p.creatable_get_creator && p.instance_ctor && p.create_instance_impl;
 	}
 
+	template<typename T>
+	static bool container_totals_match(const RBX::Reflection::ClassDescriptor* descriptor)
+	{
+		const auto& container = static_cast<const RBX::Reflection::MemberDescriptorContainer<T>&>(*descriptor);
+		if (container.finalized)
+			return false;
+
+		std::uint64_t counted = 0;
+		for (const auto* current = &container; current; current = current->base_container)
+		{
+			for (const auto& view : current->views)
+				counted += view.size();
+		}
+		return counted == container.total;
+	}
+
+	std::expected<void, std::string> ClassRegistry::validate()
+	{
+		if (m_validation)
+			return *m_validation;
+
+		const auto check = [&]() -> std::expected<void, std::string> {
+			auto* instance = find_engine_class("Instance");
+			auto* folder = find_engine_class("Folder");
+			if (!instance || !folder)
+				return std::unexpected("Instance or Folder descriptor missing from allClasses");
+
+			if (folder->base != instance)
+				return std::unexpected("Folder.base does not point at Instance; ClassDescriptor layout drifted");
+
+			if (!container_totals_match<RBX::Reflection::PropertyDescriptor>(folder) || !container_totals_match<RBX::Reflection::FunctionDescriptor>(folder))
+				return std::unexpected("member container views do not add up to total; MemberDescriptorContainerV2 layout drifted");
+
+			if (!g_rtti_provider)
+				return std::unexpected("no RTTI provider");
+
+			const auto vtable = g_rtti_provider->find_class_vtable("RBX::Instance");
+			if (!vtable)
+				return std::unexpected("RBX::Instance vtable not found");
+
+			const memory::module image(platform::studio_image_name());
+			const auto inside = [&](void* p) { return image.contains(memory::handle(p)); };
+			const auto slots = engine_virtual_slots<RBX::Instance>::value();
+			for (std::size_t slot = 0; slot < slots; ++slot)
+			{
+				if (!inside((*vtable)[slot]))
+					return std::unexpected(std::format("RBX::Instance vtable slot {} is not code; the Instance mirror has more virtuals than the engine", slot));
+			}
+			if (inside((*vtable)[slots]))
+				return std::unexpected(std::format("RBX::Instance vtable has more than {} slots; the Instance mirror is missing virtuals", slots));
+
+			return {};
+		};
+
+		m_validation = check();
+		if (!*m_validation)
+			RML_ERROR("reflection registration disabled: {}", m_validation->error());
+		return *m_validation;
+	}
+
 	RBX::Reflection::ClassDescriptor* ClassRegistry::find_engine_class(std::string_view name) const
 	{
 		const auto all = g_pointers->m_roblox_pointers.class_descriptor_all_classes();
@@ -131,6 +194,9 @@ namespace rml::reflection
 
 		if (!g_init_gate || !g_init_gate->is_open())
 			return std::unexpected("class registration is only possible inside on_init");
+
+		if (const auto valid = validate(); !valid)
+			return std::unexpected(valid.error());
 
 		if (spec.name.empty())
 			return std::unexpected("class name is empty");
@@ -245,6 +311,9 @@ namespace rml::reflection
 
 		if (!g_init_gate || !g_init_gate->is_open())
 			return std::unexpected("class extension is only possible inside on_init");
+
+		if (const auto valid = validate(); !valid)
+			return std::unexpected(valid.error());
 
 		auto* descriptor = find_engine_class(spec.name);
 		if (!descriptor)
