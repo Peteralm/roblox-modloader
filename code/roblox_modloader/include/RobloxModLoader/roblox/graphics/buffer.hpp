@@ -51,8 +51,14 @@ namespace RBX::Graphics
 			unsigned format;
 			unsigned semantic;
 			unsigned semantic_index;
+			std::uint8_t per_instance;
+			std::uint8_t reserved_15[3];
 		};
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(VertexLayout::Element, 24);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 
 	class Geometry : public Resource
 	{

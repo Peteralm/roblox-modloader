@@ -21,7 +21,7 @@ namespace RBX::Graphics
 		virtual void copy_framebuffer(Framebuffer* buffer, Texture* texture, unsigned index, unsigned mip) = 0;
 		virtual void resolve_framebuffer(Framebuffer* msaa_buffer, Framebuffer* buffer, unsigned mask) = 0;
 		virtual void generate_mipmaps(Texture* texture) = 0;
-		virtual void begin_pass(Framebuffer* buffer, unsigned load_mask, unsigned store_mask, PassClear* clear, PassResolve* resolve, unsigned flags) = 0;
+		virtual void begin_pass(Framebuffer* buffer, unsigned load_mask, unsigned store_mask, const PassClear* clear, const PassResolve* resolve, unsigned flags) = 0;
 		virtual void end_pass() = 0;
 		virtual void set_viewport(unsigned x, unsigned y, unsigned width, unsigned height) = 0;
 		virtual void set_scissor(unsigned x, unsigned y, unsigned width, unsigned height) = 0;
@@ -42,7 +42,7 @@ namespace RBX::Graphics
 		virtual void copy_texture(const CopyTextureParams& params) = 0;
 		virtual void set_render_state(const RasterizerState& rasterizer, const BlendState& blend, const DepthState& depth) = 0;
 		virtual void set_stencil_reference(std::uint8_t reference) = 0;
-		virtual void draw(Geometry* geometry, Geometry::Primitive primitive, unsigned offset, unsigned count, unsigned index_range_begin, unsigned index_range_end, unsigned instances) = 0;
+		virtual void draw(Geometry* geometry, Geometry::Primitive primitive, unsigned offset, unsigned base_vertex, unsigned count, unsigned instances, unsigned base_instance) = 0;
 		virtual void draw(const GeometryBatch& batch, unsigned offset, unsigned count) = 0;
 		virtual void begin_compute() = 0;
 		virtual void end_compute() = 0;

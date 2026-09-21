@@ -133,8 +133,31 @@ namespace RBX::Graphics
 	RML_ASSERT_SIZE(DepthState, 4);
 	RML_LAYOUT_DIAGNOSTIC_POP()
 
+	struct PassClear
+	{
+		enum Mask : std::uint32_t
+		{
+			Color0 = 1 << 0,
+			Color1 = 1 << 1,
+			Color2 = 1 << 2,
+			Color3 = 1 << 3,
+			Depth = 1 << 4,
+			Stencil = 1 << 5,
+			All = 0x3F
+		};
+
+		std::uint32_t mask;
+		std::uint32_t reserved_4[2];
+		float color[4][4];
+		float depth;
+		std::uint32_t stencil;
+	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(PassClear, 84);
+	RML_LAYOUT_DIAGNOSTIC_POP()
+
 	struct Renderbuffer;
-	struct PassClear;
 	struct PassResolve;
 	struct GeometryBatch;
 	struct ConstantBuffer;
