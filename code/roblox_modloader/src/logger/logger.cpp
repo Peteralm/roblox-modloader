@@ -157,18 +157,18 @@ namespace
 
 	void ensure_log_directory()
 	{
-		const auto root = rml::filesystem::directory::get_module_directory();
+		const auto root = rml::filesystem::directory::get_mod_loader_directory();
 
-		std::filesystem::create_directories(root / "RobloxModLoader" / "logs");
+		std::filesystem::create_directories(root / "logs");
 	}
 
 	void init_sinks()
 	{
 		if (!global_logger_holder::console_sink)
 		{
-			const auto root = rml::filesystem::directory::get_module_directory();
+			const auto root = rml::filesystem::directory::get_mod_loader_directory();
 
-			const auto log_file = root / "RobloxModLoader" / "logs" / "roblox_modloader.log";
+			const auto log_file = root / "logs" / "roblox_modloader.log";
 
 			global_logger_holder::console = rml::logger::create_platform_console();
 			global_logger_holder::console_sink = global_logger_holder::console->make_console_sink();
