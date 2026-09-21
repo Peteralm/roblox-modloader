@@ -21,6 +21,9 @@ namespace rml::qt
 		void setChecked(bool checked);
 		[[nodiscard]] bool isChecked() const;
 
+		/// Presses the button the way a user would, emitting clicked().
+		void click();
+
 		void on_clicked(std::function<void()> handler) const;
 		void on_toggled(std::function<void(bool)> handler) const;
 	};

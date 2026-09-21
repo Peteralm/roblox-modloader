@@ -67,6 +67,13 @@ namespace rml::qt
 		return fn && fn(this);
 	}
 
+	void QAbstractButton::click()
+	{
+		static const auto fn = detail::widgets<void (*)(void*)>("QAbstractButton::click()");
+		if (fn)
+			fn(this);
+	}
+
 	void QAbstractButton::on_clicked(std::function<void()> handler) const
 	{
 		static void* const signal = detail::widgets_export("QAbstractButton::clicked(bool)");

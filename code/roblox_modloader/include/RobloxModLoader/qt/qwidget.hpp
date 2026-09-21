@@ -5,8 +5,11 @@
 #include "RobloxModLoader/qt/qpaintdevice.hpp"
 #include "RobloxModLoader/qt/qpalette.hpp"
 
+#include <vector>
+
 namespace rml::qt
 {
+	class QAction;
 	class QString;
 	class QBoxLayout;
 
@@ -64,6 +67,10 @@ namespace rml::qt
 		/// The layout Studio installed on this widget, or nullptr when it has none.
 		[[nodiscard]] QBoxLayout* box_layout() const;
 		[[nodiscard]] QWidget* parent_widget() const;
+
+		/// The actions Studio attached to this widget. A menu bar answers with its
+		/// top level menus, which is how a mod reaches Studio's own commands.
+		[[nodiscard]] std::vector<QAction*> actions() const;
 
 		[[nodiscard]] QPalette palette() const;
 		void set_palette(const QPalette& palette);

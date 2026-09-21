@@ -1,7 +1,9 @@
 #include "RobloxModLoader/qt/qwidget.hpp"
 
+#include "RobloxModLoader/memory/foreign_call.hpp"
+#include "RobloxModLoader/qt/qaction.hpp"
 #include "RobloxModLoader/qt/qboxlayout.hpp"
-
+#include "RobloxModLoader/qt/qlist.hpp"
 #include "RobloxModLoader/qt/qstring.hpp"
 #include "RobloxModLoader/qt/qt_module.hpp"
 
@@ -41,6 +43,24 @@ namespace rml::qt
 	{
 		static const auto fn = detail::widgets<void* (*)(const void*)>("QWidget::parentWidget() const");
 		return fn ? static_cast<QWidget*>(fn(this)) : nullptr;
+	}
+
+	std::vector<QAction*> QWidget::actions() const
+	{
+		static void* const fn = detail::widgets_export("QWidget::actions() const");
+
+		std::vector<QAction*> result;
+		if (!fn)
+			return result;
+
+		QList<QAction*> list;
+		memory::call_returning_member(fn, *list.raw_storage(), this);
+
+		result.reserve(static_cast<std::size_t>(list.size()));
+		for (QAction* action : list)
+			result.push_back(action);
+
+		return result;
 	}
 
 	void QWidget::setStyleSheet(const QString& style)
