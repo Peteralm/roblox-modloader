@@ -12,7 +12,10 @@ namespace RBX::Graphics
 	class Resource
 	{
 	public:
-		virtual ~Resource() = default;
+		virtual ~Resource()
+		{
+		}
+
 		virtual void set_debug_name(const std::string& name) = 0;
 		virtual bool is_container_resource() const = 0;
 
@@ -26,7 +29,9 @@ namespace RBX::Graphics
 		};
 
 	protected:
-		Resource() = default;
+		Resource()
+		{
+		}
 	};
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
