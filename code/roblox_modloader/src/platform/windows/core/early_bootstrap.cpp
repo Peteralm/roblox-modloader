@@ -3,7 +3,6 @@
 #include "platform/windows/hooking/bootstrap_detour.hpp"
 #include "mod/mod_catalog.hpp"
 #include "native/early_mod_registry.hpp"
-#include "memory/class_factory_probe.hpp"
 #include "RobloxModLoader/mod/global_init_mod.hpp"
 
 #include <Windows.h>
@@ -151,69 +150,6 @@ namespace rml::platform::windows
 			return nullptr;
 		}
 
-		bool process_readable(const void* address, const std::size_t size) noexcept
-		{
-			MEMORY_BASIC_INFORMATION info{};
-			if (!address || !VirtualQuery(address, &info, sizeof(info)) || info.State != MEM_COMMIT)
-				return false;
-			constexpr DWORD readable = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ
-			    | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-			if ((info.Protect & readable) == 0 || (info.Protect & PAGE_GUARD) != 0)
-				return false;
-			const auto* start = static_cast<const std::byte*>(info.BaseAddress);
-			const auto used = static_cast<std::size_t>(static_cast<const std::byte*>(address) - start);
-			return size <= info.RegionSize - used;
-		}
-
-		bool process_executable(const void* address) noexcept
-		{
-			MEMORY_BASIC_INFORMATION info{};
-			if (!address || !VirtualQuery(address, &info, sizeof(info)) || info.State != MEM_COMMIT)
-				return false;
-			constexpr DWORD executable = PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE
-			    | PAGE_EXECUTE_WRITECOPY;
-			return (info.Protect & executable) != 0 && (info.Protect & PAGE_GUARD) == 0;
-		}
-
-		// Classes the engine has always been able to build, and classes it has
-		// always refused; the contrast between them is what names the slot.
-		constexpr const char* kCreatableProbes[] = {"Folder", "Part", "Model", "IntValue"};
-		constexpr const char* kNonCreatableProbes[] = {"Workspace", "Lighting", "RunService"};
-		constexpr std::size_t kDescriptorSearchBytes = 0x200;
-
-		const memory::FactorySlot* factory_slot() noexcept
-		{
-			static bool probed = false;
-			static bool usable = false;
-			static memory::FactorySlot slot{};
-			if (probed)
-				return usable ? &slot : nullptr;
-			probed = true;
-
-			const void* creatable[std::size(kCreatableProbes)]{};
-			std::size_t creatable_count = 0;
-			for (const auto* name : kCreatableProbes)
-				if (auto* descriptor = find_class(name))
-					creatable[creatable_count++] = descriptor;
-
-			const void* refusing[std::size(kNonCreatableProbes)]{};
-			std::size_t refusing_count = 0;
-			for (const auto* name : kNonCreatableProbes)
-				if (auto* descriptor = find_class(name))
-					refusing[refusing_count++] = descriptor;
-
-			const auto found = memory::probe_factory_slot({creatable, creatable_count},
-			    {refusing, refusing_count}, kDescriptorSearchBytes, process_readable, process_executable);
-			if (!found)
-			{
-				set_diagnostic("class factory slot could not be identified");
-				return nullptr;
-			}
-			slot = *found;
-			usable = true;
-			return &slot;
-		}
-
 		bool registry_is_mutable() noexcept
 		{
 			return s_registry && s_registry_frozen && s_class_count && *s_registry_frozen == 0
@@ -312,13 +248,6 @@ namespace rml::platform::windows
 			if (!base_found)
 				return 4;
 
-			// Without a published factory the class would exist in the registry yet
-			// refuse Instance.new, which is the shape that hung Studio before.
-			const auto* slot = factory_slot();
-			if (!slot || !memory::install_factory(const_cast<void*>(registration->descriptor), *slot,
-			        registration->factory, process_readable, process_executable))
-				return 5;
-
 			batch->pending[batch->reserved] = {
 			    registration->class_name, registration->base_class_name, registration->descriptor};
 			batch->storage[batch->old_size + batch->reserved] = const_cast<void*>(registration->descriptor);
@@ -364,21 +293,9 @@ namespace rml::platform::windows
 			release_batch(batch, true);
 		}
 
-		const void* class_factory(const void* descriptor) noexcept
-		{
-			const auto* slot = factory_slot();
-			if (!descriptor || !slot)
-				return nullptr;
-			const auto* address = static_cast<const std::byte*>(descriptor) + slot->offset;
-			if (!process_readable(address, sizeof(void*)))
-				return nullptr;
-			const auto* value = *reinterpret_cast<const void* const*>(address);
-			return process_executable(value) ? value : nullptr;
-		}
-
 		constexpr RmlDescriptorRegistrationApi kDescriptorApi{RML_DESCRIPTOR_REGISTRATION_API_VERSION,
 		    sizeof(RmlDescriptorRegistrationApi), find_class, registry_is_mutable, begin_batch,
-		    reserve_class, abort_batch, commit_batch, class_factory};
+		    reserve_class, abort_batch, commit_batch};
 
 		void initialize_log_path() noexcept
 		{

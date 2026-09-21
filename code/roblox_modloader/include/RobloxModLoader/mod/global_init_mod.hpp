@@ -3,7 +3,7 @@
 #include <cstdint>
 
 inline constexpr std::uint32_t RML_GLOBAL_INIT_ABI_VERSION = 1;
-inline constexpr std::uint32_t RML_DESCRIPTOR_REGISTRATION_API_VERSION = 2;
+inline constexpr std::uint32_t RML_DESCRIPTOR_REGISTRATION_API_VERSION = 1;
 inline constexpr std::uint32_t RML_CLASS_REGISTRATION_VERSION = 1;
 
 // The header (version, size) must be readable even for an unsupported payload.
@@ -39,10 +39,6 @@ struct RmlDescriptorRegistrationApi
 	int (*reserve_class)(void* batch, const RmlClassRegistrationV1* registration) noexcept;
 	void (*abort_batch)(void* batch) noexcept;
 	void (*commit_batch)(void* batch) noexcept;
-	// Reads the creation function of an existing class, so a module can hand a
-	// reserved class the factory of the prototype it was cloned from. Returns
-	// nullptr for a class the engine refuses to build.
-	const void* (*class_factory)(const void* descriptor) noexcept;
 };
 
 struct RmlGlobalInitContext
@@ -68,7 +64,7 @@ inline bool rml_valid_descriptor_api(const RmlDescriptorRegistrationApi* value) 
 	return value && value->version == RML_DESCRIPTOR_REGISTRATION_API_VERSION
 	    && value->size >= sizeof(RmlDescriptorRegistrationApi)
 	    && value->find_class && value->registry_is_mutable && value->begin_batch
-	    && value->reserve_class && value->abort_batch && value->commit_batch && value->class_factory;
+	    && value->reserve_class && value->abort_batch && value->commit_batch;
 }
 
 // Official mods still export start_mod, uninstall_mod and rml_abi_version.

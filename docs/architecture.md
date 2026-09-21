@@ -41,21 +41,6 @@ Once loaded, the core:
 - **Hosts the .NET runtime.** It boots CoreCLR through `hostfxr`/`nethost` and hands control to the
   managed host.
 
-## Global init
-
-Some work has to happen before Studio finishes starting: a class the engine did not ship can only
-be added while the class registry is still open. The core therefore detours a function Studio runs
-during its own global initialisation, resolves that site from an embedded per-build profile
-(`compatibility/studio-*.toml`), and runs every mod whose manifest asks for the `global_init`
-phase.
-
-At that point almost nothing exists — no logger, no .NET runtime, no DataModel — so this path is
-deliberately narrow: a C ABI, a file-backed log callback, and a descriptor registration API that
-reserves classes in one batch and publishes them in one commit. Reserved descriptors receive their
-creation function through a slot the loader identifies by contrasting creatable and non-creatable
-classes, never by a hard-coded offset, so an unrecognised layout disables the feature instead of
-corrupting the registry. Mods entered here are pinned and re-enter the normal lifecycle later.
-
 ## The managed runtime
 
 The .NET side is layered so that responsibilities stay separate:
