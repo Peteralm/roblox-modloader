@@ -10,16 +10,41 @@ RML_LOG_SCOPE("ItaniumRtti");
 
 namespace rml::memory
 {
+	static std::string itanium_substitution(const std::size_t index)
+	{
+		return index == 0 ? "S_" : "S" + std::to_string(index - 1) + "_";
+	}
+
+	static std::string itanium_template_argument(const std::string_view argument, const std::size_t substitutions)
+	{
+		if (argument == "bool")
+			return "b";
+		if (argument == "int")
+			return "i";
+		if (argument == "float")
+			return "f";
+		if (argument == "double")
+			return "d";
+		if (argument == "std::string")
+		{
+			const auto std_namespace = itanium_substitution(substitutions);
+			return "NSt3__112basic_stringIcN" + std_namespace + "11char_traitsIcEEN" + std_namespace + "9allocatorIcEEEE";
+		}
+		return {};
+	}
+
 	static std::string itanium_type_name(const std::string_view class_name)
 	{
-		std::vector<std::string_view> components;
+		const auto template_open = class_name.find('<');
+		const auto qualified = class_name.substr(0, template_open);
 
+		std::vector<std::string_view> components;
 		for (std::size_t start = 0;;)
 		{
-			const auto separator = class_name.find("::", start);
-			const auto end = separator == std::string_view::npos ? class_name.size() : separator;
+			const auto separator = qualified.find("::", start);
+			const auto end = separator == std::string_view::npos ? qualified.size() : separator;
 
-			components.push_back(class_name.substr(start, end - start));
+			components.push_back(qualified.substr(start, end - start));
 
 			if (separator == std::string_view::npos)
 				break;
@@ -32,6 +57,12 @@ namespace rml::memory
 		{
 			name += std::to_string(component.size());
 			name += component;
+		}
+
+		if (template_open != std::string_view::npos)
+		{
+			const auto argument = class_name.substr(template_open + 1, class_name.rfind('>') - template_open - 1);
+			name += "I" + itanium_template_argument(argument, components.size()) + "E";
 		}
 
 		return components.size() > 1 ? "N" + name + "E" : name;
