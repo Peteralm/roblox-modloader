@@ -60,7 +60,8 @@ namespace functions
 	using class_descriptor_ctor = void (*)(void* self, void* base, const char* name, std::uint32_t instance_id, std::uint64_t stable_id, bool a6, bool a7, const void* attributes, std::uint32_t protection, const std::uint32_t* memory_category, RBX::ArrayView<const RBX::Reflection::PropertyDescriptor*> properties, RBX::ArrayView<const RBX::Reflection::EventDescriptor*> events, RBX::ArrayView<const RBX::Reflection::FunctionDescriptor*> functions, RBX::ArrayView<const RBX::Reflection::YieldFunctionDescriptor*> yield_functions, RBX::ArrayView<const RBX::Reflection::CallbackDescriptor*> callbacks);
 	using class_descriptor_all_classes = std::vector<RBX::Reflection::ClassDescriptor*>* (*)();
 	using creatable_get_creator = const RBX::ICreator* (*)(const RBX::Name* name);
-	using instance_dtor = void (*)(void* self);
+	using instance_ctor = void (*)(void* self, const RBX::ForceConstructionInCreatable* force, const char* name);
+	using create_instance_impl = void* (*)(std::uint32_t stable_id, std::size_t size, std::size_t align, std::uint32_t memory_category, void* (*construct)(void* memory, const void* args), const void* args);
 	using property_descriptor_ctor = void (*)(void* self, void* class_descriptor, const void* type, const char* name, const char* category, const void* attributes, std::uint32_t protection_get, std::uint32_t protection_set, bool a9);
 	using function_descriptor_ctor = void (*)(void* self, void* class_descriptor, const char* name, std::uint32_t protection, std::uint64_t attributes_lo, std::uint64_t attributes_hi);
 	using event_descriptor_ctor = void (*)(void* self, void* class_descriptor, const char* name, std::uint32_t protection, const void* attributes);

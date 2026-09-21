@@ -39,10 +39,17 @@ namespace rml
 				},
 			},
 			{
-				"INSTANCE_DTOR",
-				"F4 4F BE A9 FD 7B 01 A9 FD 43 00 91 F3 03 00 AA ? ? ? ? ? ? ? ? 08 41 00 91 08 00 00 F9 ? ? ? ? ? ? ? ? 08 C1 BF 38",
+				"INSTANCE_CTOR",
+				"FF 83 01 D1 F8 5F 02 A9 F6 57 03 A9 F4 4F 04 A9 FD 7B 05 A9 FD 43 01 91 F6 03 02 AA F3 03 00 AA ? ? ? ? ? ? ? ? ? ? ? ? 38 00 80 52",
 				[](const memory::handle ptr) {
-					g_pointers->m_roblox_pointers.instance_dtor = ptr.as<functions::instance_dtor>();
+					g_pointers->m_roblox_pointers.instance_ctor = ptr.as<functions::instance_ctor>();
+				},
+			},
+			{
+				"CREATABLE_CREATE_INSTANCE_IMPL",
+				"FF 83 02 D1 FC 6F 04 A9 FA 67 05 A9 F8 5F 06 A9 F6 57 07 A9 F4 4F 08 A9 FD 7B 09 A9 FD 43 02 91 F7 03 05 AA F6 03 04 AA FB 03 02 AA FA 03 01 AA F9 03 00 AA F5 03 08 AA E0 03 03 AA ? ? ? ? F3 03 00 AA ? ? ? ? F4 03 00 AA ? ? ? ? 80 0E 40 F9 ? ? ? ? F8 03 00 AA 80 0E 40 F9",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.create_instance_impl = ptr.as<functions::create_instance_impl>();
 				},
 			},
 			{

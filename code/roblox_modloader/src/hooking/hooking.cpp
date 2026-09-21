@@ -57,9 +57,6 @@ namespace rml
 		if (g_pointers->m_roblox_pointers.creatable_get_creator)
 			DetourHookHelper::add<Hooks::creatable_get_creator>("CREATABLE_GET_CREATOR", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.creatable_get_creator));
 
-		if (g_pointers->m_roblox_pointers.instance_dtor)
-			DetourHookHelper::add<Hooks::instance_dtor>("INSTANCE_DTOR", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.instance_dtor));
-
 		g_hooking = this;
 	}
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RobloxModLoader/util/layout_assert.hpp"
+
 #include <cstdint>
 #include <memory>
 
@@ -14,6 +16,17 @@ namespace RBX
 		Scripting = 2,
 		Engine = 3
 	};
+
+	class ForceConstructionInCreatable
+	{
+	public:
+		EngineContext* context;
+		std::int32_t tag;
+	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(ForceConstructionInCreatable, 16);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 
 	class ICreator
 	{

@@ -157,7 +157,8 @@ struct RobloxPointers
 	functions::class_descriptor_ctor class_descriptor_ctor;
 	functions::class_descriptor_all_classes class_descriptor_all_classes;
 	functions::creatable_get_creator creatable_get_creator;
-	functions::instance_dtor instance_dtor;
+	functions::instance_ctor instance_ctor;
+	functions::create_instance_impl create_instance_impl;
 	functions::property_descriptor_ctor property_descriptor_ctor;
 	functions::function_descriptor_ctor function_descriptor_ctor;
 	functions::event_descriptor_ctor event_descriptor_ctor;
