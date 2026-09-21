@@ -2,6 +2,7 @@
 
 #include "RobloxModLoader/rml_export.hpp"
 
+#include <cstddef>
 #include <memory>
 #include <string_view>
 
@@ -18,6 +19,7 @@ namespace rml::reflection
 		ClassBuilder& operator=(ClassBuilder&&) noexcept;
 
 		ClassBuilder& base(std::string_view engine_class);
+		ClassBuilder& payload(std::size_t bytes);
 		void commit();
 
 	private:

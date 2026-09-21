@@ -37,5 +37,6 @@ namespace rml
 		static void qt_action_activate(void* self, int event);
 		static void global_init();
 		static const RBX::ICreator* creatable_get_creator(const RBX::Name* name);
+		static void instance_dtor(void* self);
 	};
 }

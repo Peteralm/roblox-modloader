@@ -104,6 +104,7 @@ namespace rml::reflection
 		entry.descriptor = reinterpret_cast<RBX::Reflection::ClassDescriptor*>(entry.storage.get());
 		entry.creator = std::make_unique<ModInstanceCreator>(entry.descriptor);
 		m_creators[&entry.descriptor->name] = entry.creator.get();
+		m_payload_sizes[entry.descriptor] = spec.payload_size;
 
 		RML_INFO("Registered class {} : {} (descriptor 0x{:X}, name 0x{:X})", spec.name, spec.base,
 		    reinterpret_cast<std::uintptr_t>(entry.descriptor), reinterpret_cast<std::uintptr_t>(&entry.descriptor->name));
@@ -128,6 +129,34 @@ namespace rml::reflection
 		}
 
 		return engine_vtable;
+	}
+
+	void* ClassRegistry::payload_for(const void* instance, const RBX::Reflection::ClassDescriptor* descriptor)
+	{
+		if (!instance)
+			return nullptr;
+
+		if (!descriptor)
+			descriptor = *reinterpret_cast<const RBX::Reflection::ClassDescriptor* const*>(static_cast<const std::byte*>(instance) + k_descriptor_field_offset);
+
+		std::lock_guard lock(m_payload_mutex);
+		if (const auto it = m_payloads.find(instance); it != m_payloads.end())
+			return it->second.get();
+
+		const auto size_it = m_payload_sizes.find(descriptor);
+		if (size_it == m_payload_sizes.end() || size_it->second == 0)
+			return nullptr;
+
+		auto block = std::make_unique<std::byte[]>(size_it->second);
+		std::memset(block.get(), 0, size_it->second);
+		return m_payloads.emplace(instance, std::move(block)).first->second.get();
+	}
+
+	void ClassRegistry::forget(const void* instance)
+	{
+		std::lock_guard lock(m_payload_mutex);
+		if (!m_payloads.empty())
+			m_payloads.erase(instance);
 	}
 
 	const RBX::ICreator* ClassRegistry::creator_for(const RBX::Name* name) const
@@ -182,6 +211,12 @@ namespace rml::reflection
 	ClassBuilder& ClassBuilder::base(std::string_view engine_class)
 	{
 		m_spec->base = engine_class;
+		return *this;
+	}
+
+	ClassBuilder& ClassBuilder::payload(std::size_t bytes)
+	{
+		m_spec->payload_size = bytes;
 		return *this;
 	}
 

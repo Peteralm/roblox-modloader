@@ -18,6 +18,7 @@ namespace rml::reflection
 	{
 		std::string name;
 		std::string base{"Instance"};
+		std::size_t payload_size{0};
 	};
 
 	class ModInstanceCreator final : public RBX::ICreator
@@ -60,9 +61,14 @@ namespace rml::reflection
 		[[nodiscard]] const RBX::ICreator* creator_for(const RBX::Name* name) const;
 		[[nodiscard]] RBX::Reflection::ClassDescriptor* find_engine_class(std::string_view name) const;
 		[[nodiscard]] void** vtable_for(const RBX::Reflection::ClassDescriptor* descriptor, void** engine_vtable);
+		[[nodiscard]] void* payload_for(const void* instance, const RBX::Reflection::ClassDescriptor* descriptor);
+		void forget(const void* instance);
 
 	private:
 		std::deque<RegisteredClass> m_classes;
 		std::unordered_map<const RBX::Name*, const RBX::ICreator*> m_creators;
+		std::unordered_map<const RBX::Reflection::ClassDescriptor*, std::size_t> m_payload_sizes;
+		std::mutex m_payload_mutex;
+		std::unordered_map<const void*, std::unique_ptr<std::byte[]>> m_payloads;
 	};
 }
