@@ -95,6 +95,24 @@ namespace rml::memory
 		return references;
 	}
 
+	static std::optional<void**> vtable_for_name_string(const memory::module& image, const char* name_string)
+	{
+		for (const auto* const name_reference : find_references(image, name_string))
+		{
+			const auto* const type_info = name_reference - 1;
+
+			for (const auto* const type_info_reference : find_references(image, type_info))
+			{
+				if (*(type_info_reference - 1) != 0)
+					continue;
+
+				return reinterpret_cast<void**>(const_cast<std::uintptr_t*>(type_info_reference + 1));
+			}
+		}
+
+		return std::nullopt;
+	}
+
 	class ItaniumRttiProvider final : public IRttiProvider
 	{
 	public:
@@ -113,22 +131,39 @@ namespace rml::memory
 				return std::nullopt;
 			}
 
-			for (const auto* const name_reference : find_references(image, name_string))
+			const auto vtable = vtable_for_name_string(image, name_string);
+			if (vtable)
+				RML_DEBUG("RTTI '{}' -> vtable {}", class_name, static_cast<void*>(*vtable));
+			else
+				RML_WARN("Found the RTTI name for '{}' but no primary vtable pointing at it", class_name);
+			return vtable;
+		}
+
+		std::optional<void**> find_class_vtable_matching(const std::string_view mangled_prefix, const std::function<bool(std::string_view)>& accept) override
+		{
+			const module image{platform::studio_image_name()};
+			if (!image.loaded())
+				return std::nullopt;
+
+			const std::string_view haystack{image.begin().as<const char*>(), image.size()};
+			std::string needle;
+			needle.push_back('\0');
+			needle.append(mangled_prefix);
+
+			for (auto position = haystack.find(needle); position != std::string_view::npos; position = haystack.find(needle, position + 1))
 			{
-				const auto* const type_info = name_reference - 1;
+				const char* const name_string = haystack.data() + position + 1;
+				const std::string_view name{name_string};
+				if (!accept(name))
+					continue;
 
-				for (const auto* const type_info_reference : find_references(image, type_info))
+				if (const auto vtable = vtable_for_name_string(image, name_string))
 				{
-					if (*(type_info_reference - 1) != 0)
-						continue;
-
-					auto** const vtable = reinterpret_cast<void**>(const_cast<std::uintptr_t*>(type_info_reference + 1));
-					RML_DEBUG("RTTI '{}' -> vtable {}", class_name, static_cast<void*>(vtable));
+					RML_DEBUG("RTTI '{}' -> vtable {}", name, static_cast<void*>(*vtable));
 					return vtable;
 				}
 			}
 
-			RML_WARN("Found the RTTI name for '{}' but no primary vtable pointing at it", class_name);
 			return std::nullopt;
 		}
 	};

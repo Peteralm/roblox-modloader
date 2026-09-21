@@ -20,6 +20,11 @@ namespace rml::memory
 			return vtable;
 		}
 
+		std::optional<void**> find_class_vtable_matching(std::string_view, const std::function<bool(std::string_view)>&) override
+		{
+			return std::nullopt;
+		}
+
 	private:
 		rtti::RTTIManager m_manager;
 	};
