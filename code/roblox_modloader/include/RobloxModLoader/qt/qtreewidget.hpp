@@ -46,6 +46,13 @@ namespace rml::qt
 
 		[[nodiscard]] int current_row() const;
 		void set_current_row(int row);
+		/// The row at `row`, or nullptr when out of range. Rewriting a row in place
+		/// is what keeps the scrollbar where the user left it.
+		[[nodiscard]] QTreeWidgetItem* item(int row) const;
+
+		/// Removes and frees the row at `row`.
+		void remove_item(int row);
+
 		[[nodiscard]] int count() const;
 
 		/// Fires with the selected row index, or -1 when nothing is selected.

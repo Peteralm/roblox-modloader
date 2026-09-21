@@ -95,6 +95,14 @@ namespace rml::qt
 			fn(this, enabled);
 	}
 
+	void QWidget::set_takes_focus(const bool takes_focus)
+	{
+		static const auto fn = detail::widgets<void (*)(void*, int)>("QWidget::setFocusPolicy(Qt::FocusPolicy)");
+		// Qt::StrongFocus is 0x0b, Qt::NoFocus is 0.
+		if (fn)
+			fn(this, takes_focus ? 0x0b : 0);
+	}
+
 	void QWidget::setToolTip(const QString& text)
 	{
 		static const auto fn = detail::widgets<void (*)(void*, const void*)>("QWidget::setToolTip(QString const&)");

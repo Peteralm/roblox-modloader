@@ -49,6 +49,10 @@ namespace rml::qt
 		void move(int x, int y);
 
 		void setEnabled(bool enabled);
+
+		/// Whether the widget can take keyboard focus. A button that refuses focus
+		/// never paints itself as the highlighted default button.
+		void set_takes_focus(bool takes_focus);
 		void setToolTip(const QString& text);
 		bool close();
 

@@ -169,6 +169,23 @@ namespace rml::qt
 			set_current(this, item);
 	}
 
+	QTreeWidgetItem* QTreeWidget::item(const int row) const
+	{
+		static const auto fn = detail::widgets<void* (*)(const void*, int)>(
+		    "QTreeWidget::topLevelItem(int) const");
+		return fn ? static_cast<QTreeWidgetItem*>(fn(this, row)) : nullptr;
+	}
+
+	void QTreeWidget::remove_item(const int row)
+	{
+		static const auto fn = detail::widgets<void* (*)(void*, int)>("QTreeWidget::takeTopLevelItem(int)");
+		if (!fn)
+			return;
+		// takeTopLevelItem gives ownership back, so the row is freed here.
+		if (auto* taken = static_cast<QTreeWidgetItem*>(fn(this, row)))
+			QTreeWidgetItem::destroy(taken);
+	}
+
 	int QTreeWidget::count() const
 	{
 		static const auto fn = detail::widgets<int (*)(const void*)>("QTreeWidget::topLevelItemCount() const");
