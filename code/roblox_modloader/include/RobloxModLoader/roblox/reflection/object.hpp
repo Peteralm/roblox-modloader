@@ -69,35 +69,63 @@ namespace RBX::Reflection
 		using EventDescriptors = MemberDescriptorContainer<EventDescriptor>::DescriptorView;
 		using CallbackDescriptors = MemberDescriptorContainer<CallbackDescriptor>::DescriptorView;
 
-	private:
-		char padding[24]; // some boolean?
-	public:
-		const Security::Permissions security;
-
-		ClassDescriptor* const base;
+		public:
+		std::uint64_t security;
+		std::byte reserved_after_security[16];
+#if defined(RML_WINDOWS)
+		std::uint32_t functionality;
+		std::uint32_t reserved_after_functionality;
+		const std::uint32_t* memory_category;
+		ClassDescriptor* base;
+#else
+		const std::uint32_t* memory_category;
+		ClassDescriptor* base;
+		std::uint32_t reserved_before_functionality;
+		std::uint16_t functionality;
+		std::uint16_t reserved_after_functionality;
+#endif
 		ClassDescriptors derived_classes;
-		const unsigned replicate_type : 2;
-		const unsigned can_xml_write : 1;
-		const unsigned is_scriptable : 1;
+		std::uint32_t member_table_count;
+		std::uint32_t reserved_1dc;
+		std::uint64_t reserved_1e0;
+		void* member_table;
+		std::uint64_t reserved_1f0;
+		void* arena;
+				std::byte reserved_tail[48];
+
+		unsigned replicate_type() const
+		{
+			return (functionality >> 1) & 3;
+		}
+
+		unsigned can_xml_write() const
+		{
+			return (functionality >> 3) & 1;
+		}
+
+		unsigned is_scriptable() const
+		{
+			return (functionality >> 4) & 1;
+		}
 
 		const ClassDescriptor* get_base() const
 		{
 			return base;
 		}
 
-		ReplicationLevel get_replication_level() const
+				ReplicationLevel get_replication_level() const
 		{
-			return static_cast<ReplicationLevel>(replicate_type);
+			return static_cast<ReplicationLevel>(replicate_type());
 		}
 
 		bool is_script_creatable() const
 		{
-			return is_scriptable != 0;
+			return is_scriptable() != 0;
 		}
 
-		bool is_serializable() const
+				bool is_serializable() const
 		{
-			return can_xml_write != 0;
+			return can_xml_write() != 0;
 		}
 
 		ClassDescriptors::const_iterator derived_classes_begin() const
@@ -298,11 +326,27 @@ namespace RBX::Reflection
 
 	private:
 		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_SIZE(ClassDescriptor, 0x250);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, padding, 0x208);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, security, 0x220);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, base, 0x228);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, derived_classes, 0x230);
+			#if defined(RML_WINDOWS)
+			RML_ASSERT_SIZE(ClassDescriptor, 0x2A8);
+			RML_ASSERT_OFFSET(ClassDescriptor, security, 0x208);
+			RML_ASSERT_OFFSET(ClassDescriptor, functionality, 0x220);
+			RML_ASSERT_OFFSET(ClassDescriptor, memory_category, 0x228);
+			RML_ASSERT_OFFSET(ClassDescriptor, base, 0x230);
+			RML_ASSERT_OFFSET(ClassDescriptor, derived_classes, 0x238);
+			RML_ASSERT_OFFSET(ClassDescriptor, member_table_count, 0x250);
+			RML_ASSERT_OFFSET(ClassDescriptor, member_table, 0x260);
+			RML_ASSERT_OFFSET(ClassDescriptor, arena, 0x270);
+#else
+			RML_ASSERT_SIZE(ClassDescriptor, 0x230);
+			RML_ASSERT_OFFSET(ClassDescriptor, security, 0x190);
+			RML_ASSERT_OFFSET(ClassDescriptor, memory_category, 0x1A8);
+			RML_ASSERT_OFFSET(ClassDescriptor, base, 0x1B0);
+			RML_ASSERT_OFFSET(ClassDescriptor, functionality, 0x1BC);
+			RML_ASSERT_OFFSET(ClassDescriptor, derived_classes, 0x1C0);
+			RML_ASSERT_OFFSET(ClassDescriptor, member_table_count, 0x1D8);
+			RML_ASSERT_OFFSET(ClassDescriptor, member_table, 0x1E8);
+			RML_ASSERT_OFFSET(ClassDescriptor, arena, 0x1F8);
+#endif
 		RML_LAYOUT_GUARD_END()
 	};
 

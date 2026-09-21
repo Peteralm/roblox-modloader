@@ -126,12 +126,19 @@ namespace RBX::Reflection
 	private:
 		using ResolvedLookup = std::unordered_map<std::string_view, MemberDescriptorType*>;
 
-	protected:
-		char _descriptor_pre_pad[0x18];
-		Collection descriptors;
-		char _descriptor_post_pad[0x30];
-
 	public:
+		Collection descriptors;
+		const CollectionEntry* finalized_data;
+		std::size_t finalized_size;
+		std::uint64_t total;
+		MemberDescriptorContainer* base_container;
+#if defined(RML_WINDOWS)
+		Collection finalize_scratch;
+#endif
+		void* owner;
+		std::uint8_t finalized;
+		std::byte reserved_tail[7];
+
 		const Collection& get_descriptors() const
 		{
 			return descriptors;
@@ -186,7 +193,18 @@ namespace RBX::Reflection
 		}
 	};
 
-	RML_ASSERT_LAYOUT_SIZE(MemberDescriptorContainer<ClassDescriptor>, 0x60);
+		RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, finalized_data, 0x18);
+	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, total, 0x28);
+	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, base_container, 0x30);
+#if defined(RML_WINDOWS)
+	RML_ASSERT_SIZE(MemberDescriptorContainer<ClassDescriptor>, 0x60);
+	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, owner, 0x50);
+	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, finalized, 0x58);
+#else
+	RML_ASSERT_SIZE(MemberDescriptorContainer<ClassDescriptor>, 0x48);
+	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, owner, 0x38);
+	RML_ASSERT_OFFSET(MemberDescriptorContainer<ClassDescriptor>, finalized, 0x40);
+#endif
 
 	class MemberDescriptor : public Descriptor
 	{

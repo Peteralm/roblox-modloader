@@ -1,13 +1,9 @@
 #pragma once
 
-#include <cstddef>
+#include <span>
 
 namespace RBX
 {
 	template<typename T>
-	struct ArrayView
-	{
-		const T* data;
-		std::size_t size;
-	};
+	using ArrayView = std::span<const T>;
 }
