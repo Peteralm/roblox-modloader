@@ -38,6 +38,7 @@ namespace functions
 	using signal_disconnect = void(RML_ENGINE_CALL*)(void* slot);
 	using signal_slot_free = void(RML_ENGINE_CALL*)(void* slot);
 	using signal_mutex_get = void*(RML_ENGINE_CALL*)();
+	using global_init = void (*)();
 
 	using lua_gettop = int(RML_ENGINE_CALL*)(lua_State* L);
 	using lua_settop = void(RML_ENGINE_CALL*)(lua_State* L, int idx);

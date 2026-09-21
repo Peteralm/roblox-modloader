@@ -40,6 +40,11 @@ namespace rml
 			return &m_original;
 		}
 
+		[[nodiscard]] const std::string& name() const
+		{
+			return m_name;
+		}
+
 		void fix_hook_address();
 
 	private:

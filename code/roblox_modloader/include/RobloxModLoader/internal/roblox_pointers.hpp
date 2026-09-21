@@ -153,6 +153,8 @@ struct RobloxPointers
 	functions::signal_slot_free signal_slot_free;
 	functions::signal_mutex_get signal_mutex_get;
 
+	functions::global_init global_init;
+
 	const std::vector<const RBX::Reflection::Type*>* type_registry;
 };
 #pragma pack(pop)

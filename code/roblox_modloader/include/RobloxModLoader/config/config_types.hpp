@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <optional>
@@ -65,6 +66,7 @@ namespace rml::config
 			bool debug_mode{false};
 			bool enable_hot_reload{false};
 			bool verbose_logging{false};
+			std::uint32_t init_gate_timeout_seconds{30};
 		} developer;
 	};
 

@@ -130,18 +130,21 @@ namespace rml
 	void Hooking::DetourHookHelper::enable_hook_if_hooking_is_already_running() const
 	{
 		if (g_hooking && g_hooking->m_enabled)
+			enable_now();
+	}
+
+	void Hooking::DetourHookHelper::enable_now() const
+	{
+		if (m_on_hooking_available)
 		{
-			if (m_on_hooking_available)
-			{
-				m_detour_hook->set_target_and_create_hook(m_on_hooking_available());
-			}
-
-			if (const auto result = m_detour_hook->enable(); !result)
-				RML_ERROR("Failed to enable late-registered detour hook: {}", result.error().describe());
-
-			if (g_hook_engine)
-				g_hook_engine->apply_queued();
+			m_detour_hook->set_target_and_create_hook(m_on_hooking_available());
 		}
+
+		if (const auto result = m_detour_hook->enable(); !result)
+			RML_ERROR("Failed to enable detour hook '{}' immediately: {}", m_detour_hook->name(), result.error().describe());
+
+		if (g_hook_engine)
+			g_hook_engine->apply_queued();
 	}
 
 }

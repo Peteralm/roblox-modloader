@@ -11,6 +11,13 @@ namespace rml
 		constexpr auto batch_and_hash = memory::make_batch<
 
 			{
+				"RBX_GLOBAL_INIT",
+				"FF 03 01 D1 F4 4F 02 A9 FD 7B 03 A9 FD C3 00 91 ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? 00 01 40 F9 09 1C 00 12 0A FC 48 D3 3F 19 00 71 49 1D 00 12 20 29 43 7A ? ? ? ? 01 05 40 F9 ? ? ? ? ? ? ? ? 03 00 80 D2",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.global_init = ptr.as<functions::global_init>();
+				},
+			},
+			{
 				"MENU_BUILD_FROM_DOM",
 				"FF C3 02 D1 FC 6F 05 A9 FA 67 06 A9 F8 5F 07 A9 F6 57 08 A9 F4 4F 09 A9 FD 7B 0A A9 FD 83 02 91 F4 03 01 AA F3 03 00 AA E2 17 00 F9",
 				[](const memory::handle ptr) {

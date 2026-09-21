@@ -167,6 +167,7 @@ namespace rml::config::serialization {
         table.insert_or_assign("debug_mode", developer.debug_mode);
         table.insert_or_assign("enable_hot_reload", developer.enable_hot_reload);
         table.insert_or_assign("verbose_logging", developer.verbose_logging);
+        table.insert_or_assign("init_gate_timeout_seconds", static_cast<std::int64_t>(developer.init_gate_timeout_seconds));
 
         return table;
     }
@@ -185,6 +186,12 @@ namespace rml::config::serialization {
 
             if (const auto verbose_node = table["verbose_logging"]) {
                 developer.verbose_logging = verbose_node.value_or(developer.verbose_logging);
+            }
+
+            if (const auto timeout_node = table["init_gate_timeout_seconds"]) {
+                if (const auto timeout = timeout_node.value<std::int64_t>()) {
+                    developer.init_gate_timeout_seconds = static_cast<std::uint32_t>(*timeout);
+                }
             }
 
             return developer;
