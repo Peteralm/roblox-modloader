@@ -2,6 +2,7 @@
 
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/memory/module.hpp"
+#include "app/init_gate.hpp"
 #include "mod/mod_kind.hpp"
 
 RML_LOG_SCOPE("NativeModLoader");
@@ -107,6 +108,13 @@ namespace rml::native
 			uninstall(instance);
 			module_ptr->detach();
 			return std::unexpected(std::format("Unknown exception while calling 'on_load' for {}", path.string()));
+		}
+
+		if (const auto gate = InitGate::instance())
+		{
+			gate->register_callback(instance->name, [instance](InitContext& context) {
+				instance->on_init(context);
+			});
 		}
 
 		ModRegistry::Entry entry{};

@@ -1,6 +1,6 @@
 #pragma once
 
-#define RML_ABI_VERSION 2
+#define RML_ABI_VERSION 3
 
 namespace rml::version
 {
