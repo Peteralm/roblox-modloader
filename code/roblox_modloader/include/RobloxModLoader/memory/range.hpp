@@ -29,10 +29,10 @@ namespace rml::memory
 		/// anchor available: scan for it, then find the code that loads it.
 		[[nodiscard]] std::vector<handle> scan_strings(std::string_view text, std::size_t limit = 0) const;
 
-		/// x86-64 `lea r64, [rip + disp32]` instructions that materialize `target`.
-		/// Returns the address of each instruction. `limit` of 0 collects every match.
-		/// Other architectures materialize addresses differently and always yield nothing.
-		[[nodiscard]] std::vector<handle> scan_rip_references(handle target, std::size_t limit = 0) const;
+		/// Instructions that materialize `target`: `lea r64, [rip + disp32]` on x86-64,
+		/// `adrp` (with the add/ldr that follows it) on arm64. Returns the address of the
+		/// instruction that starts each reference. `limit` of 0 collects every match.
+		[[nodiscard]] std::vector<handle> scan_references(handle target, std::size_t limit = 0) const;
 
 	protected:
 		handle m_base;

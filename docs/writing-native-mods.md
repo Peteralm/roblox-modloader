@@ -99,13 +99,14 @@ const rml::memory::module studio{rml::platform::studio_image_name()};
 
 // Exactly one literal and exactly one instruction loading it, or the mod refuses to run.
 const auto markers = studio.scan_strings("[Internal]", 2);
-const auto references = studio.scan_rip_references(markers.front(), 2);
+const auto references = studio.scan_references(markers.front(), 2);
 ```
 
-`scan_rip_references` decodes `lea r64, [rip + disp32]`, so it is x86-64 only and returns nothing
-elsewhere. From the reference, walk back to the `call` that precedes it and check the callee looks
-like what you expect before using it; see
-[`examples/internal_developer`](../examples/internal_developer) for the whole chain.
+`scan_references` decodes whatever the architecture uses to materialize an address:
+`lea r64, [rip + disp32]` on x86-64, `adrp` plus the `add`/`ldr` that follows it on arm64. From the
+reference, walk back to the call that precedes it (`call` on x86-64, `bl` on arm64) and check the
+callee looks like what you expect before using it; see
+[`examples/internal_developer`](../examples/internal_developer) for the whole chain on both.
 
 Ask for one more match than you need (`limit` of 2 when you expect 1). A second match means the
 anchor is ambiguous in this build, and acting on the first one would write to the wrong address.

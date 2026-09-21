@@ -1,6 +1,5 @@
 #pragma once
 
-#include "RobloxModLoader/memory/batch.hpp"
 #include "RobloxModLoader/memory/module.hpp"
 
 #include <array>
