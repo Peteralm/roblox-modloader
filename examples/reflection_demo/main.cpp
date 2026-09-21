@@ -1,6 +1,7 @@
 #include <RobloxModLoader/logger/logger.hpp>
 #include <RobloxModLoader/mod/init_context.hpp>
 #include <RobloxModLoader/mod/mod_base.hpp>
+#include <RobloxModLoader/roblox/reflection/class_builder.hpp>
 #include <spdlog/spdlog.h>
 
 class reflection_demo final : public ModBase
@@ -24,7 +25,8 @@ public:
 
 	void on_init(rml::InitContext& context) override
 	{
-		m_log->info("on_init open={}", context.is_open());
+		context.define_class("ModThing").commit();
+		m_log->info("ModThing registered");
 	}
 
 	void on_unload() override

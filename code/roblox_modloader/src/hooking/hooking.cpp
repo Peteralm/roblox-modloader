@@ -54,6 +54,9 @@ namespace rml
 #endif
 		DetourHookHelper::add<Hooks::build_menu_bar_from_dom>("MENU_BUILD_FROM_DOM", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.build_menu_bar_from_dom));
 
+		if (g_pointers->m_roblox_pointers.creatable_get_creator)
+			DetourHookHelper::add<Hooks::creatable_get_creator>("CREATABLE_GET_CREATOR", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.creatable_get_creator));
+
 		g_hooking = this;
 	}
 

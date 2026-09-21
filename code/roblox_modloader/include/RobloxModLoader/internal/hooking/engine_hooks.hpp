@@ -11,6 +11,8 @@
 namespace RBX
 {
 	class TaskSchedulerJob;
+	class ICreator;
+	class Name;
 }
 
 namespace rml
@@ -34,5 +36,6 @@ namespace rml
 		static void* build_menu_bar_from_dom(void* out_menu_bar, void* dom, void* context);
 		static void qt_action_activate(void* self, int event);
 		static void global_init();
+		static const RBX::ICreator* creatable_get_creator(const RBX::Name* name);
 	};
 }

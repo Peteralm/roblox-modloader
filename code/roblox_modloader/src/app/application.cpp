@@ -74,11 +74,11 @@ namespace rml
 			RML_INFO("Subsystem initialized: {}", subsystem->name());
 		}
 
-		if (const auto gate = InitGate::instance())
-			gate->mark_mods_loaded();
-
 		g_hooking->enable();
 		RML_INFO("Hooking enabled.");
+
+		if (const auto gate = InitGate::instance())
+			gate->mark_mods_loaded();
 
 		if (qt::QtIntegration::instance()->ensure_action_hook())
 		{
