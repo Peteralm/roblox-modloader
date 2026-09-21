@@ -154,6 +154,13 @@ struct RobloxPointers
 	functions::signal_mutex_get signal_mutex_get;
 
 	functions::global_init global_init;
+	functions::class_descriptor_ctor class_descriptor_ctor;
+	functions::class_descriptor_all_classes class_descriptor_all_classes;
+	functions::creatable_get_creator creatable_get_creator;
+	functions::instance_dtor instance_dtor;
+	functions::property_descriptor_ctor property_descriptor_ctor;
+	functions::function_descriptor_ctor function_descriptor_ctor;
+	functions::event_descriptor_ctor event_descriptor_ctor;
 
 	const std::vector<const RBX::Reflection::Type*>* type_registry;
 };

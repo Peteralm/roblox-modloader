@@ -18,6 +18,55 @@ namespace rml
 				},
 			},
 			{
+				"CLASS_DESCRIPTOR_CTOR",
+				"FF C3 01 D1 FC 6F 01 A9 FA 67 02 A9 F8 5F 03 A9 F6 57 04 A9 F4 4F 05 A9 FD 7B 06 A9 FD 83 01 91 F8 03 07 AA F6 03 06 AA",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.class_descriptor_ctor = ptr.as<functions::class_descriptor_ctor>();
+				},
+			},
+			{
+				"CLASS_DESCRIPTOR_ALL_CLASSES",
+				"FF C3 00 D1 FD 7B 02 A9 FD 83 00 91 ? ? ? ? ? ? ? ? E8 07 00 F9 ? ? ? ? ? ? ? ? 08 C1 BF F8 1F 05 00 B1 ? ? ? ? E8 23 00 91 A8 83 1F F8 A8 23 00 D1 E8 0B 00 F9 ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? E1 43 00 91 ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? FD 7B 42 A9",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.class_descriptor_all_classes = ptr.as<functions::class_descriptor_all_classes>();
+				},
+			},
+			{
+				"CREATABLE_GET_CREATOR",
+				"FF C3 00 D1 F4 4F 01 A9 FD 7B 02 A9 FD 83 00 91 F3 03 00 AA ? ? ? ? F3 07 00 F9 ? ? ? ? ? ? ? ? E1 23 00 91",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.creatable_get_creator = ptr.as<functions::creatable_get_creator>();
+				},
+			},
+			{
+				"INSTANCE_DTOR",
+				"F4 4F BE A9 FD 7B 01 A9 FD 43 00 91 F3 03 00 AA ? ? ? ? ? ? ? ? 08 41 00 91 08 00 00 F9 ? ? ? ? ? ? ? ? 08 C1 BF 38",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.instance_dtor = ptr.as<functions::instance_dtor>();
+				},
+			},
+			{
+				"PROPERTY_DESCRIPTOR_CTOR",
+				"F6 57 BD A9 F4 4F 01 A9 FD 7B 02 A9 FD 83 00 91 F4 03 07 AA F3 03 05 AA",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.property_descriptor_ctor = ptr.as<functions::property_descriptor_ctor>();
+				},
+			},
+			{
+				"FUNCTION_DESCRIPTOR_CTOR",
+				"FF 83 00 D1 FD 7B 01 A9 FD 43 00 91 E8 03 03 AA E4 17 00 A9",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.function_descriptor_ctor = ptr.as<functions::function_descriptor_ctor>();
+				},
+			},
+			{
+				"EVENT_DESCRIPTOR_CTOR",
+				"FD 7B BF A9 FD 03 00 91 E5 03 03 AA ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? 08 00 00 F9 00 E4 00 6F 00 80 84 3C 00 80 85 3C 00 80 86 3C FD 7B C1 A8 C0 03 5F D6 1F 09 00 B9",
+				[](const memory::handle ptr) {
+					g_pointers->m_roblox_pointers.event_descriptor_ctor = ptr.as<functions::event_descriptor_ctor>();
+				},
+			},
+			{
 				"MENU_BUILD_FROM_DOM",
 				"FF C3 02 D1 FC 6F 05 A9 FA 67 06 A9 F8 5F 07 A9 F6 57 08 A9 F4 4F 09 A9 FD 7B 0A A9 FD 83 02 91 F4 03 01 AA F3 03 00 AA E2 17 00 F9",
 				[](const memory::handle ptr) {
