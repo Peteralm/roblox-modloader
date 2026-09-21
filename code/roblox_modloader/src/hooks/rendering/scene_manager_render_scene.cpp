@@ -1,6 +1,7 @@
 #include "RobloxModLoader/hooking/hooking.hpp"
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/internal/hooking/engine_hooks.hpp"
+#include "RobloxModLoader/roblox/graphics/render_camera.hpp"
 #include "roblox/graphics/graphics_registry.hpp"
 
 void rml::Hooks::scene_manager_render_scene(void* self, RBX::Graphics::DeviceContext* context, RBX::Graphics::Framebuffer* target, const void* camera,
@@ -12,6 +13,6 @@ void rml::Hooks::scene_manager_render_scene(void* self, RBX::Graphics::DeviceCon
 	if (!registry.validate())
 		return;
 
-	graphics::RenderPassContext pass{context, target, registry.device()};
+	graphics::RenderPassContext pass{context, target, registry.device(), static_cast<const RBX::Graphics::RenderCamera*>(camera), self};
 	registry.run_render_callbacks(pass);
 }

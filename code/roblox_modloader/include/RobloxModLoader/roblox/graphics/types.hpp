@@ -157,7 +157,6 @@ namespace RBX::Graphics
 	RML_ASSERT_SIZE(PassClear, 84);
 	RML_LAYOUT_DIAGNOSTIC_POP()
 
-	struct Renderbuffer;
 	struct PassResolve;
 	struct GeometryBatch;
 	struct ConstantBuffer;

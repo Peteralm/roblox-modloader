@@ -9,6 +9,7 @@ namespace RBX::Graphics
 	class Device;
 	class DeviceContext;
 	class Framebuffer;
+	class RenderCamera;
 	class VisualEngine;
 }
 
@@ -19,6 +20,8 @@ namespace rml::graphics
 		RBX::Graphics::DeviceContext* context;
 		RBX::Graphics::Framebuffer* target;
 		RBX::Graphics::Device* device;
+		const RBX::Graphics::RenderCamera* camera;
+		void* scene_manager;
 	};
 
 	using RenderCallback = std::function<void(RenderPassContext&)>;

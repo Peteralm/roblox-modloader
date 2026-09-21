@@ -4,6 +4,7 @@
 #include "types.hpp"
 
 #include <memory>
+#include <vector>
 
 namespace RBX::Graphics
 {
@@ -83,9 +84,73 @@ namespace RBX::Graphics
 		virtual void commit_changes() = 0;
 		virtual bool supports_mip_level_reduction(unsigned levels) const = 0;
 		virtual void reduce_mip_levels(unsigned levels) = 0;
+
+		std::uint32_t type;
+		std::uint32_t format;
+		std::uint32_t width;
+		std::uint32_t height;
+		std::uint32_t depth;
+		std::uint32_t mip_levels;
+		std::uint32_t array_length;
+		std::uint32_t samples;
+		std::uint32_t usage;
+		std::uint32_t reserved_5c;
+		void* reserved_60;
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_OFFSET(Texture, type, 0x38);
+	RML_ASSERT_OFFSET(Texture, samples, 0x54);
+	RML_ASSERT_SIZE(Texture, 0x68);
+	RML_LAYOUT_DIAGNOSTIC_POP()
+
+	struct Renderbuffer
+	{
+		std::shared_ptr<Texture> texture;
+		std::uint64_t index;
+		std::uint32_t mip;
+		std::uint32_t reserved_1c;
+	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(Renderbuffer, 0x20);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 
 	class Framebuffer : public Resource
 	{
+	public:
+		union
+		{
+			std::vector<Renderbuffer> color;
+		};
+		union
+		{
+			Renderbuffer depth;
+		};
+		std::uint32_t width;
+		std::uint32_t height;
+		std::uint32_t samples;
+		std::uint32_t mask;
+		std::uint32_t size[2];
+		std::uint32_t format;
+		std::uint32_t reserved_8c;
+
+	protected:
+		Framebuffer()
+		{
+		}
+
+	public:
+		~Framebuffer() override
+		{
+		}
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_OFFSET(Framebuffer, color, 0x38);
+	RML_ASSERT_OFFSET(Framebuffer, depth, 0x50);
+	RML_ASSERT_OFFSET(Framebuffer, width, 0x70);
+	RML_ASSERT_OFFSET(Framebuffer, size, 0x80);
+	RML_ASSERT_OFFSET(Framebuffer, format, 0x88);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 }
