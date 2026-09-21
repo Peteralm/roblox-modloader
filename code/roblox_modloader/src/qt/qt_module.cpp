@@ -41,6 +41,7 @@ namespace rml::qt::detail
 	static QtLibrary g_core{{"Qt5Core.dll", "Qt5Cored.dll", "QtCore"}, nullptr, {}};
 	static QtLibrary g_widgets{{"Qt5Widgets.dll", "Qt5Widgetsd.dll", "QtWidgets"}, nullptr, {}};
 	static QtLibrary g_gui{{"Qt5Gui.dll", "Qt5Guid.dll", "QtGui"}, nullptr, {}};
+	static QtLibrary g_docking{{"QtitanDocking.dll", "QtitanDockingd.dll"}, nullptr, {}};
 
 	static void* find_quiet(QtLibrary& library, const char* signature)
 	{
@@ -62,6 +63,16 @@ namespace rml::qt::detail
 
 		RML_WARN("Qt symbol not found: {}", *signatures.begin());
 		return nullptr;
+	}
+
+	void* docking_export_optional(const char* signature)
+	{
+		return find_quiet(g_docking, signature);
+	}
+
+	void* docking_export(const char* signature)
+	{
+		return find(g_docking, {signature});
 	}
 
 	void* core_export_optional(const char* signature)

@@ -10,6 +10,9 @@ namespace rml::qt::detail
 	[[nodiscard]] void* core_export(const char* signature);
 	[[nodiscard]] void* widgets_export(const char* signature);
 	[[nodiscard]] void* gui_export(const char* signature);
+	/// QtitanDocking ships beside Studio and carries its dock panels.
+	[[nodiscard]] void* docking_export(const char* signature);
+	[[nodiscard]] void* docking_export_optional(const char* signature);
 	[[nodiscard]] void* core_export_optional(const char* signature);
 	[[nodiscard]] void* widgets_export_optional(const char* signature);
 	[[nodiscard]] void* gui_export_optional(const char* signature);
@@ -33,6 +36,18 @@ namespace rml::qt::detail
 	[[nodiscard]] Fn gui(const char* signature)
 	{
 		return reinterpret_cast<Fn>(gui_export(signature));
+	}
+
+	template<typename Fn>
+	[[nodiscard]] Fn docking(const char* signature)
+	{
+		return reinterpret_cast<Fn>(docking_export(signature));
+	}
+
+	template<typename Fn>
+	[[nodiscard]] Fn docking_optional(const char* signature)
+	{
+		return reinterpret_cast<Fn>(docking_export_optional(signature));
 	}
 
 	template<typename Fn>
