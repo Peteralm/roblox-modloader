@@ -50,6 +50,10 @@ namespace rml::qt
 
 		void setEnabled(bool enabled);
 
+		/// The narrowest the widget may become. A docked panel opens at least this
+		/// wide, which is how a panel asks for its own default width.
+		void set_minimum_width(int width);
+
 		/// Whether the widget can take keyboard focus. A button that refuses focus
 		/// never paints itself as the highlighted default button.
 		void set_takes_focus(bool takes_focus);

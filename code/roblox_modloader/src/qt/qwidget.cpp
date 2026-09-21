@@ -95,6 +95,13 @@ namespace rml::qt
 			fn(this, enabled);
 	}
 
+	void QWidget::set_minimum_width(const int width)
+	{
+		static const auto fn = detail::widgets<void (*)(void*, int)>("QWidget::setMinimumWidth(int)");
+		if (fn)
+			fn(this, width);
+	}
+
 	void QWidget::set_takes_focus(const bool takes_focus)
 	{
 		static const auto fn = detail::widgets<void (*)(void*, int)>("QWidget::setFocusPolicy(Qt::FocusPolicy)");
