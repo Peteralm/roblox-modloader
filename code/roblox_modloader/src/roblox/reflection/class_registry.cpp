@@ -1,10 +1,11 @@
 #include "class_registry.hpp"
 
-#include "RobloxModLoader/hooking/vtable_index.hpp"
+#include "mod_descriptors.hpp"
+
 #include "RobloxModLoader/memory/foreign_call.hpp"
+#include "RobloxModLoader/memory/i_rtti_provider.hpp"
 #include "RobloxModLoader/mod/init_context.hpp"
 #include "RobloxModLoader/roblox/reflection/array_view.hpp"
-#include "RobloxModLoader/roblox/reflection/class_builder.hpp"
 #include "app/init_gate.hpp"
 #include "pointers.hpp"
 
@@ -17,6 +18,8 @@ namespace rml::reflection
 	static constexpr std::size_t k_class_descriptor_storage = 1024;
 	static constexpr std::uint32_t k_protection_none = 0;
 	static constexpr std::uint16_t k_functionality_persistent_local = 0x1 | 0x8 | 0x10;
+	static constexpr std::size_t k_descriptor_field_offset = 0x18;
+	static constexpr std::int32_t k_force_construction_tag = 6138;
 
 	struct ClassAttributes
 	{
@@ -31,12 +34,64 @@ namespace rml::reflection
 		std::uintptr_t control_block;
 	};
 
-	static constexpr std::size_t k_descriptor_field_offset = 0x18;
-
-	static const RBX::Name* mod_get_class_name(const void* self)
+	struct ConstructArgs
 	{
-		const auto descriptor = *reinterpret_cast<const RBX::Reflection::ClassDescriptor* const*>(static_cast<const std::byte*>(self) + k_descriptor_field_offset);
-		return &descriptor->name;
+		RegisteredClass* entry;
+		RBX::ForceConstructionInCreatable force;
+	};
+
+	static const RBX::Reflection::ClassDescriptor* descriptor_of(const void* instance)
+	{
+		return *reinterpret_cast<const RBX::Reflection::ClassDescriptor* const*>(static_cast<const std::byte*>(instance) + k_descriptor_field_offset);
+	}
+
+	static void* construct_mod_instance(void* memory, const void* args)
+	{
+		const auto& [entry, force] = *static_cast<const ConstructArgs*>(args);
+		g_pointers->m_roblox_pointers.instance_ctor(memory, &force, entry->name.c_str());
+		entry->layout.construct(memory);
+
+		auto& vptr = *static_cast<void***>(memory);
+		vptr = ClassRegistry::instance().vtable_for(*entry, vptr);
+		*reinterpret_cast<const RBX::Reflection::ClassDescriptor**>(static_cast<std::byte*>(memory) + k_descriptor_field_offset) = entry->descriptor;
+		return memory;
+	}
+
+#if defined(RML_WINDOWS)
+	static constexpr std::size_t k_first_merged_slot = 1;
+
+	static void* mod_scalar_deleting_dtor(void* self, unsigned int flags)
+	{
+		auto* entry = ClassRegistry::instance().class_of(self);
+		entry->layout.destroy(self);
+		return reinterpret_cast<void* (*)(void*, unsigned int)>(entry->engine_vtable[0])(self, flags);
+	}
+#else
+	static constexpr std::size_t k_first_merged_slot = 2;
+
+	static void mod_complete_dtor(void* self)
+	{
+		auto* entry = ClassRegistry::instance().class_of(self);
+		entry->layout.destroy(self);
+		reinterpret_cast<void (*)(void*)>(entry->engine_vtable[0])(self);
+	}
+
+	static void mod_deleting_dtor(void* self)
+	{
+		auto* entry = ClassRegistry::instance().class_of(self);
+		entry->layout.destroy(self);
+		reinterpret_cast<void (*)(void*)>(entry->engine_vtable[1])(self);
+	}
+#endif
+
+	static std::uint32_t memory_category_of(const RBX::Reflection::ClassDescriptor* descriptor)
+	{
+		for (; descriptor; descriptor = descriptor->base)
+		{
+			if (descriptor->memory_category)
+				return *descriptor->memory_category;
+		}
+		return 0;
 	}
 
 	ClassRegistry& ClassRegistry::instance()
@@ -51,7 +106,7 @@ namespace rml::reflection
 			return false;
 
 		const auto& p = g_pointers->m_roblox_pointers;
-		return p.class_descriptor_ctor && p.class_descriptor_all_classes && p.creatable_get_creator && p.object_create_by_name && p.get_string_atom;
+		return p.class_descriptor_ctor && p.class_descriptor_all_classes && p.creatable_get_creator && p.instance_ctor && p.create_instance_impl;
 	}
 
 	RBX::Reflection::ClassDescriptor* ClassRegistry::find_engine_class(std::string_view name) const
@@ -87,76 +142,102 @@ namespace rml::reflection
 		if (!base)
 			return std::unexpected(std::format("base class '{}' not found", spec.base));
 
+		if (!g_rtti_provider)
+			return std::unexpected("no RTTI provider; engine vtables are unreachable");
+
+		const auto engine_vtable = g_rtti_provider->find_class_vtable("RBX::" + spec.base);
+		if (!engine_vtable)
+			return std::unexpected(std::format("no engine vtable for RBX::{}", spec.base));
+
 		auto& entry = m_classes.emplace_back();
 		entry.name = spec.name;
+		entry.layout = spec.layout;
+		entry.base = base;
+		entry.engine_vtable = *engine_vtable;
 		entry.storage = std::make_unique<std::byte[]>(k_class_descriptor_storage);
 		std::memset(entry.storage.get(), 0, k_class_descriptor_storage);
+
+		for (const auto& property : spec.properties)
+		{
+			auto member = make_property(entry.storage.get(), property.name, property.category, property.type, property.accessor.get());
+			if (!member)
+			{
+				m_classes.pop_back();
+				return std::unexpected(member.error());
+			}
+
+			entry.property_table.push_back(reinterpret_cast<const RBX::Reflection::PropertyDescriptor*>(member->storage.get()));
+			entry.member_storage.push_back(std::move(member->storage));
+			entry.accessors.push_back(property.accessor);
+		}
+
+		for (const auto& function : spec.functions)
+		{
+			auto member = make_function(entry.storage.get(), function.name, function.invoker.get());
+			if (!member)
+			{
+				m_classes.pop_back();
+				return std::unexpected(member.error());
+			}
+
+			entry.function_table.push_back(reinterpret_cast<const RBX::Reflection::FunctionDescriptor*>(member->storage.get()));
+			entry.member_storage.push_back(std::move(member->storage));
+			entry.invokers.push_back(function.invoker);
+		}
 
 		static ClassAttributes attributes;
 		const auto& p = g_pointers->m_roblox_pointers;
 		p.class_descriptor_ctor(entry.storage.get(), base, entry.name.c_str(), 0, 0, false, false, &attributes, k_protection_none, nullptr,
-		    RBX::ArrayView<const RBX::Reflection::PropertyDescriptor*>{},
+		    RBX::ArrayView<const RBX::Reflection::PropertyDescriptor*>{entry.property_table},
 		    RBX::ArrayView<const RBX::Reflection::EventDescriptor*>{},
-		    RBX::ArrayView<const RBX::Reflection::FunctionDescriptor*>{},
+		    RBX::ArrayView<const RBX::Reflection::FunctionDescriptor*>{entry.function_table},
 		    RBX::ArrayView<const RBX::Reflection::YieldFunctionDescriptor*>{},
 		    RBX::ArrayView<const RBX::Reflection::CallbackDescriptor*>{});
 
 		entry.descriptor = reinterpret_cast<RBX::Reflection::ClassDescriptor*>(entry.storage.get());
-		entry.creator = std::make_unique<ModInstanceCreator>(entry.descriptor);
+		entry.creator = std::make_unique<ModInstanceCreator>(entry);
 		m_creators[&entry.descriptor->name] = entry.creator.get();
-		m_payload_sizes[entry.descriptor] = spec.payload_size;
+		m_by_descriptor[entry.descriptor] = &entry;
 
-		RML_INFO("Registered class {} : {} (descriptor 0x{:X}, name 0x{:X})", spec.name, spec.base,
-		    reinterpret_cast<std::uintptr_t>(entry.descriptor), reinterpret_cast<std::uintptr_t>(&entry.descriptor->name));
+		RML_INFO("Registered class {} : {} ({} bytes, {} properties, {} functions, descriptor 0x{:X})", spec.name, spec.base, spec.layout.size,
+		    entry.property_table.size(), entry.function_table.size(), reinterpret_cast<std::uintptr_t>(entry.descriptor));
 		return entry.descriptor;
 	}
 
-	void** ClassRegistry::vtable_for(const RBX::Reflection::ClassDescriptor* descriptor, void** engine_vtable)
+	RegisteredClass* ClassRegistry::class_of(const void* instance)
 	{
-		for (auto& entry : m_classes)
-		{
-			if (entry.descriptor != descriptor)
-				continue;
-
-			std::call_once(entry.vtable_once, [&] {
-				entry.vtable = std::make_unique<ClonedVtable>();
-				std::memcpy(entry.vtable->data(), engine_vtable - k_vtable_prefix_slots, sizeof(ClonedVtable));
-				const auto slot = vtable_index_of(&RBX::Reflection::DescribedBase::get_class_name);
-				(*entry.vtable)[k_vtable_prefix_slots + slot] = reinterpret_cast<void*>(&mod_get_class_name);
-				RML_INFO("Cloned vtable for {} from 0x{:X}; get_class_name at slot {}", entry.name, reinterpret_cast<std::uintptr_t>(engine_vtable), slot);
-			});
-			return entry.vtable->data() + k_vtable_prefix_slots;
-		}
-
-		return engine_vtable;
+		const auto it = m_by_descriptor.find(descriptor_of(instance));
+		return it == m_by_descriptor.end() ? nullptr : it->second;
 	}
 
-	void* ClassRegistry::payload_for(const void* instance, const RBX::Reflection::ClassDescriptor* descriptor)
+	void** ClassRegistry::vtable_for(RegisteredClass& entry, void** derived_vtable)
 	{
-		if (!instance)
-			return nullptr;
+		std::call_once(entry.vtable_once, [&] {
+			entry.vtable = std::make_unique<ClonedVtable>();
+			std::memcpy(entry.vtable->data(), entry.engine_vtable - k_vtable_prefix_slots, sizeof(ClonedVtable));
+			auto* slots = entry.vtable->data() + k_vtable_prefix_slots;
 
-		if (!descriptor)
-			descriptor = *reinterpret_cast<const RBX::Reflection::ClassDescriptor* const*>(static_cast<const std::byte*>(instance) + k_descriptor_field_offset);
+#if defined(RML_WINDOWS)
+			slots[0] = reinterpret_cast<void*>(&mod_scalar_deleting_dtor);
+#else
+			slots[0] = reinterpret_cast<void*>(&mod_complete_dtor);
+			slots[1] = reinterpret_cast<void*>(&mod_deleting_dtor);
+#endif
 
-		std::lock_guard lock(m_payload_mutex);
-		if (const auto it = m_payloads.find(instance); it != m_payloads.end())
-			return it->second.get();
+			std::size_t merged = 0;
+			for (std::size_t slot = k_first_merged_slot; slot < entry.layout.virtual_slots && slot < k_cloned_vtable_slots; ++slot)
+			{
+				if (derived_vtable[slot] == entry.layout.base_vtable[slot])
+					continue;
+				slots[slot] = derived_vtable[slot];
+				++merged;
+			}
 
-		const auto size_it = m_payload_sizes.find(descriptor);
-		if (size_it == m_payload_sizes.end() || size_it->second == 0)
-			return nullptr;
+			RML_INFO("Built vtable for {} from RBX::{} at 0x{:X}: {} of {} slots overridden", entry.name, entry.base->name.to_string(),
+			    reinterpret_cast<std::uintptr_t>(entry.engine_vtable), merged, entry.layout.virtual_slots);
+		});
 
-		auto block = std::make_unique<std::byte[]>(size_it->second);
-		std::memset(block.get(), 0, size_it->second);
-		return m_payloads.emplace(instance, std::move(block)).first->second.get();
-	}
-
-	void ClassRegistry::forget(const void* instance)
-	{
-		std::lock_guard lock(m_payload_mutex);
-		if (!m_payloads.empty())
-			m_payloads.erase(instance);
+		return entry.vtable->data() + k_vtable_prefix_slots;
 	}
 
 	const RBX::ICreator* ClassRegistry::creator_for(const RBX::Name* name) const
@@ -165,23 +246,17 @@ namespace rml::reflection
 		return it == m_creators.end() ? nullptr : it->second;
 	}
 
-	std::shared_ptr<void> ModInstanceCreator::create(RBX::EngineContext* context, RBX::CreatorRole role) const
+	std::shared_ptr<void> ModInstanceCreator::create(RBX::EngineContext* context, RBX::CreatorRole) const
 	{
 		const auto& p = g_pointers->m_roblox_pointers;
-		const auto folder = p.get_string_atom("Folder");
+		ConstructArgs args{&m_entry, {context, k_force_construction_tag}};
 
 		CreatedInstance created{};
-		memory::call_returning<CreatedInstance>(reinterpret_cast<void*>(p.object_create_by_name), created,
-		    reinterpret_cast<std::uintptr_t>(context), static_cast<std::uintptr_t>(folder), static_cast<std::uint32_t>(RBX::CreatorRole::Engine));
+		memory::call_returning<CreatedInstance>(reinterpret_cast<void*>(p.create_instance_impl), created, m_entry.descriptor->stable_id, m_entry.layout.size,
+		    m_entry.layout.align, memory_category_of(m_entry.descriptor), &construct_mod_instance, static_cast<const void*>(&args));
 
 		std::shared_ptr<void> result;
 		static_assert(sizeof(result) == sizeof(created));
-		if (!created.instance)
-			return result;
-
-		*reinterpret_cast<const RBX::Reflection::ClassDescriptor**>(created.instance + k_descriptor_field_offset) = m_descriptor;
-		auto& vptr = *reinterpret_cast<void***>(created.instance);
-		vptr = ClassRegistry::instance().vtable_for(m_descriptor, vptr);
 		std::memcpy(&result, &created, sizeof(created));
 		return result;
 	}
@@ -199,8 +274,8 @@ namespace rml::reflection
 
 namespace rml::reflection
 {
-	ClassBuilder::ClassBuilder(std::string_view name, std::string_view base) :
-	    m_spec(std::make_unique<ClassSpec>(std::string(name), std::string(base)))
+	ClassBuilder::ClassBuilder(std::string_view name, std::string_view base, const ClassLayout& layout) :
+	    m_spec(std::make_unique<ClassSpec>(std::string(name), std::string(base), layout))
 	{
 	}
 
@@ -208,29 +283,23 @@ namespace rml::reflection
 	ClassBuilder::ClassBuilder(ClassBuilder&&) noexcept = default;
 	ClassBuilder& ClassBuilder::operator=(ClassBuilder&&) noexcept = default;
 
-	ClassBuilder& ClassBuilder::base(std::string_view engine_class)
+	ClassBuilder& ClassBuilder::property(std::string_view name, const PropertyType type, std::shared_ptr<void> accessor, std::string_view category)
 	{
-		m_spec->base = engine_class;
+		m_spec->properties.push_back(PropertySpec{std::string(name), std::string(category), type, std::move(accessor)});
 		return *this;
 	}
 
-	ClassBuilder& ClassBuilder::payload(std::size_t bytes)
+	ClassBuilder& ClassBuilder::function(std::string_view name, std::shared_ptr<FunctionInvoker> invoker)
 	{
-		m_spec->payload_size = bytes;
+		m_spec->functions.push_back(FunctionSpec{std::string(name), std::move(invoker)});
 		return *this;
 	}
 
-	void ClassBuilder::commit()
+	const RBX::Reflection::ClassDescriptor* ClassBuilder::commit()
 	{
-		if (const auto result = ClassRegistry::instance().define(*m_spec); !result)
+		auto result = ClassRegistry::instance().define(*m_spec);
+		if (!result)
 			throw std::logic_error(result.error());
-	}
-}
-
-namespace rml
-{
-	reflection::ClassBuilder InitContext::define_class(std::string_view name, std::string_view base)
-	{
-		return reflection::ClassBuilder(name, base);
+		return *result;
 	}
 }

@@ -1,28 +1,109 @@
 #pragma once
 
 #include "RobloxModLoader/rml_export.hpp"
+#include "RobloxModLoader/roblox/reflection/described_creatable.hpp"
+#include "RobloxModLoader/roblox/reflection/property_accessor.hpp"
 
-#include <cstddef>
 #include <memory>
+#include <string>
 #include <string_view>
+#include <type_traits>
+
+struct lua_State;
+
+namespace RBX
+{
+	class Instance;
+
+	namespace Reflection
+	{
+		class ClassDescriptor;
+	}
+}
 
 namespace rml::reflection
 {
 	struct ClassSpec;
 
+	class FunctionInvoker
+	{
+	public:
+		virtual ~FunctionInvoker() = default;
+		virtual int invoke(RBX::Instance* instance, lua_State* L) const = 0;
+	};
+
+	template<typename Class>
+	class MethodInvoker final : public FunctionInvoker
+	{
+	public:
+		using Method = int (Class::*)(lua_State*);
+
+		explicit MethodInvoker(Method method) :
+		    m_method(method)
+		{
+		}
+
+		int invoke(RBX::Instance* instance, lua_State* L) const override
+		{
+			return (static_cast<Class*>(instance)->*m_method)(L);
+		}
+
+	private:
+		Method m_method;
+	};
+
 	class RML_EXPORT ClassBuilder
 	{
 	public:
-		ClassBuilder(std::string_view name, std::string_view base);
+		ClassBuilder(std::string_view name, std::string_view base, const ClassLayout& layout);
 		~ClassBuilder();
 		ClassBuilder(ClassBuilder&&) noexcept;
 		ClassBuilder& operator=(ClassBuilder&&) noexcept;
 
-		ClassBuilder& base(std::string_view engine_class);
-		ClassBuilder& payload(std::size_t bytes);
-		void commit();
+		ClassBuilder& property(std::string_view name, PropertyType type, std::shared_ptr<void> accessor, std::string_view category);
+		ClassBuilder& function(std::string_view name, std::shared_ptr<FunctionInvoker> invoker);
+		const RBX::Reflection::ClassDescriptor* commit();
 
 	private:
 		std::unique_ptr<ClassSpec> m_spec;
+	};
+
+	template<typename Derived>
+	class TypedClassBuilder
+	{
+	public:
+		TypedClassBuilder(std::string_view name, std::string_view base) :
+		    m_builder(name, base, Derived::layout())
+		{
+		}
+
+		template<typename T>
+		TypedClassBuilder& property(std::string_view name, T Derived::* member, std::string_view category = "Data")
+		{
+			m_builder.property(name, property_type_of<T>::value, std::make_shared<MemberGetSet<Derived, T>>(member), category);
+			return *this;
+		}
+
+		template<typename Getter, typename Setter>
+		TypedClassBuilder& property(std::string_view name, Getter getter, Setter setter, std::string_view category = "Data")
+		{
+			using T = std::remove_cvref_t<std::invoke_result_t<Getter, const Derived&>>;
+			m_builder.property(name, property_type_of<T>::value, std::make_shared<MethodGetSet<Derived, T, Getter, Setter>>(getter, setter), category);
+			return *this;
+		}
+
+		TypedClassBuilder& function(std::string_view name, int (Derived::*method)(lua_State*))
+		{
+			m_builder.function(name, std::make_shared<MethodInvoker<Derived>>(method));
+			return *this;
+		}
+
+		void commit()
+		{
+			Derived::s_descriptor = m_builder.commit();
+		}
+
+	private:
+		ClassBuilder m_builder;
 	};
 }

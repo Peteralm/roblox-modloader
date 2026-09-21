@@ -11,15 +11,24 @@ local ok, result = pcall(function()
 	local thing = Instance.new("ModThing")
 	local lines = {
 		"ClassName=" .. thing.ClassName,
-		"IsA(Instance)=" .. tostring(thing:IsA("Instance")),
 		"IsA(ModThing)=" .. tostring(thing:IsA("ModThing")),
-		"IsA(Folder)=" .. tostring(thing:IsA("Folder")),
 	}
 	thing.Name = "FromLuau"
 	thing.Parent = workspace
-	table.insert(lines, "Parent=" .. tostring(thing.Parent))
-	local found = workspace:FindFirstChild("FromLuau")
-	table.insert(lines, "FindFirstChild=" .. tostring(found and found.ClassName))
+	thing.Speed = 3.5
+	thing.Label = "hello"
+	table.insert(lines, "Speed=" .. tostring(thing.Speed))
+	table.insert(lines, "Label=" .. tostring(thing.Label))
+	local previous = thing:Reset()
+	table.insert(lines, "Reset()=" .. tostring(previous))
+	table.insert(lines, "Speed after=" .. tostring(thing.Speed))
+	table.insert(lines, "Label after=" .. tostring(thing.Label))
+	local child = Instance.new("Folder")
+	child.Name = "Child"
+	child.Parent = thing
+	table.insert(lines, "children=" .. tostring(#thing:GetChildren()))
+	thing:Destroy()
+	table.insert(lines, "destroyed=" .. tostring(thing.Parent == nil))
 	return table.concat(lines, " ")
 end)
 

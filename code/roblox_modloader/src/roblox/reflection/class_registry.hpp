@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RobloxModLoader/internal/common.hpp"
+#include "RobloxModLoader/roblox/reflection/class_builder.hpp"
 #include "RobloxModLoader/roblox/reflection/creatable.hpp"
 #include "RobloxModLoader/roblox/reflection/object.hpp"
 
@@ -11,21 +12,40 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace rml::reflection
 {
+	struct PropertySpec
+	{
+		std::string name;
+		std::string category;
+		PropertyType type;
+		std::shared_ptr<void> accessor;
+	};
+
+	struct FunctionSpec
+	{
+		std::string name;
+		std::shared_ptr<FunctionInvoker> invoker;
+	};
+
 	struct ClassSpec
 	{
 		std::string name;
-		std::string base{"Instance"};
-		std::size_t payload_size{0};
+		std::string base;
+		ClassLayout layout;
+		std::vector<PropertySpec> properties;
+		std::vector<FunctionSpec> functions;
 	};
+
+	struct RegisteredClass;
 
 	class ModInstanceCreator final : public RBX::ICreator
 	{
 	public:
-		explicit ModInstanceCreator(RBX::Reflection::ClassDescriptor* descriptor) :
-		    m_descriptor(descriptor)
+		explicit ModInstanceCreator(RegisteredClass& entry) :
+		    m_entry(entry)
 		{
 		}
 
@@ -34,7 +54,7 @@ namespace rml::reflection
 		bool is_script_creatable() const override;
 
 	private:
-		RBX::Reflection::ClassDescriptor* m_descriptor;
+		RegisteredClass& m_entry;
 	};
 
 	inline constexpr std::size_t k_vtable_prefix_slots = 2;
@@ -44,11 +64,19 @@ namespace rml::reflection
 	struct RegisteredClass
 	{
 		std::string name;
+		ClassLayout layout{};
 		RBX::Reflection::ClassDescriptor* descriptor{};
+		RBX::Reflection::ClassDescriptor* base{};
+		void** engine_vtable{};
 		std::unique_ptr<ModInstanceCreator> creator;
 		std::unique_ptr<std::byte[]> storage;
 		std::unique_ptr<ClonedVtable> vtable;
 		std::once_flag vtable_once;
+		std::vector<std::unique_ptr<std::byte[]>> member_storage;
+		std::vector<std::shared_ptr<void>> accessors;
+		std::vector<std::shared_ptr<FunctionInvoker>> invokers;
+		std::vector<const RBX::Reflection::PropertyDescriptor*> property_table;
+		std::vector<const RBX::Reflection::FunctionDescriptor*> function_table;
 	};
 
 	class ClassRegistry
@@ -60,15 +88,12 @@ namespace rml::reflection
 		[[nodiscard]] std::expected<RBX::Reflection::ClassDescriptor*, std::string> define(const ClassSpec& spec);
 		[[nodiscard]] const RBX::ICreator* creator_for(const RBX::Name* name) const;
 		[[nodiscard]] RBX::Reflection::ClassDescriptor* find_engine_class(std::string_view name) const;
-		[[nodiscard]] void** vtable_for(const RBX::Reflection::ClassDescriptor* descriptor, void** engine_vtable);
-		[[nodiscard]] void* payload_for(const void* instance, const RBX::Reflection::ClassDescriptor* descriptor);
-		void forget(const void* instance);
+		[[nodiscard]] RegisteredClass* class_of(const void* instance);
+		[[nodiscard]] void** vtable_for(RegisteredClass& entry, void** derived_vtable);
 
 	private:
 		std::deque<RegisteredClass> m_classes;
 		std::unordered_map<const RBX::Name*, const RBX::ICreator*> m_creators;
-		std::unordered_map<const RBX::Reflection::ClassDescriptor*, std::size_t> m_payload_sizes;
-		std::mutex m_payload_mutex;
-		std::unordered_map<const void*, std::unique_ptr<std::byte[]>> m_payloads;
+		std::unordered_map<const RBX::Reflection::ClassDescriptor*, RegisteredClass*> m_by_descriptor;
 	};
 }
