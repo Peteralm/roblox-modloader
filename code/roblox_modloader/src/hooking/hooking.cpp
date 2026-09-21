@@ -13,9 +13,11 @@ RML_LOG_SCOPE("Hooking");
 namespace rml
 {
 	Hooking::Hooking() :
-	    m_hook_engine(create_hook_engine())
+	    m_hook_engine(g_hook_engine ? nullptr : create_hook_engine()),
+	    m_owns_engine(m_hook_engine != nullptr)
 	{
-		g_hook_engine = m_hook_engine.get();
+		if (m_owns_engine)
+			g_hook_engine = m_hook_engine.get();
 
 		RML_INFO("Initializing hooking");
 
@@ -63,7 +65,8 @@ namespace rml
 		}
 
 		g_hooking = nullptr;
-		g_hook_engine = nullptr;
+		if (m_owns_engine)
+			g_hook_engine = nullptr;
 	}
 
 	void Hooking::enable()
@@ -83,7 +86,8 @@ namespace rml
 				RML_ERROR("Failed to enable detour hook: {}", result.error().describe());
 		}
 
-		m_hook_engine->apply_queued();
+		if (g_hook_engine)
+			g_hook_engine->apply_queued();
 
 		m_enabled = true;
 	}
@@ -107,8 +111,8 @@ namespace rml
 				RML_WARN("Failed to disable detour hook: {}", result.error().describe());
 		}
 
-		if (m_hook_engine)
-			m_hook_engine->apply_queued();
+		if (g_hook_engine)
+			g_hook_engine->apply_queued();
 
 		m_detour_hook_helpers.clear();
 	}

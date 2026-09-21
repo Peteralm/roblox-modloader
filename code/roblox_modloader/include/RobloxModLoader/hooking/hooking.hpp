@@ -87,6 +87,7 @@ namespace rml
 	private:
 		bool m_enabled{};
 		std::unique_ptr<IHookEngine> m_hook_engine;
+		bool m_owns_engine{};
 		std::unordered_map<rml::JobKind, std::unique_ptr<vtable_hook> > m_jobs_hook;
 
 		static inline std::vector<DetourHookHelper> m_detour_hook_helpers;
