@@ -12,6 +12,19 @@ namespace rml::qt
 			fn(this, title.data());
 	}
 
+	QWidget* QWidget::create(QWidget* parent)
+	{
+		static const auto construct = detail::widgets<void* (*)(void*, void*, int)>(
+		    "QWidget::QWidget(QWidget*, QFlags<Qt::WindowType>)");
+		return detail::heap_construct<QWidget>(detail::WIDGET_INSTANCE_SIZE, construct, parent, 0);
+	}
+
+	void QWidget::destroy(QWidget* widget)
+	{
+		static const auto dtor = detail::widgets<void (*)(void*)>("QWidget::~QWidget()");
+		detail::heap_destroy(dtor, widget);
+	}
+
 	void QWidget::setStyleSheet(const QString& style)
 	{
 		static const auto fn = detail::widgets<void (*)(void*, const void*)>("QWidget::setStyleSheet(QString const&)");

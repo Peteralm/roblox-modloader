@@ -34,6 +34,10 @@ namespace rml::qt
 		virtual void leaveEvent(void* e) = 0;
 		virtual void paintEvent(void* e) = 0;
 
+		/// A bare container, the widget a layout is installed on.
+		[[nodiscard]] static QWidget* create(QWidget* parent);
+		static void destroy(QWidget* widget);
+
 		void setWindowTitle(const QString& title);
 		void setStyleSheet(const QString& style);
 		void show();
