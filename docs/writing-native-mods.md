@@ -87,6 +87,30 @@ down manually in `on_unload`. Resolve `target_address` from the engine yourself 
 pattern scan or a known offset); see [`examples/internal_developer`](../examples/internal_developer)
 for a working hook.
 
+## Finding the target
+
+A byte signature pins the instructions the compiler happened to emit, so it dies on the update that
+adds a local variable somewhere nearby. A string literal comes from the source and survives that
+churn, which makes it the most durable anchor available. `rml::memory::range` — and therefore
+`rml::memory::module` — can search for one and for the code that loads it:
+
+```cpp
+const rml::memory::module studio{rml::platform::studio_image_name()};
+
+// Exactly one literal and exactly one instruction loading it, or the mod refuses to run.
+const auto markers = studio.scan_strings("[Internal]", 2);
+const auto references = studio.scan_rip_references(markers.front(), 2);
+```
+
+`scan_rip_references` decodes `lea r64, [rip + disp32]`, so it is x86-64 only and returns nothing
+elsewhere. From the reference, walk back to the `call` that precedes it and check the callee looks
+like what you expect before using it; see
+[`examples/internal_developer`](../examples/internal_developer) for the whole chain.
+
+Ask for one more match than you need (`limit` of 2 when you expect 1). A second match means the
+anchor is ambiguous in this build, and acting on the first one would write to the wrong address.
+Pattern scanning through `make_batch` is still there for targets no string reaches.
+
 ## Notes
 
 - Keep hook bodies small and fast — they run on engine threads.

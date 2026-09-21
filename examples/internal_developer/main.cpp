@@ -11,8 +11,8 @@ namespace internal_developer
 	{
 		const auto& pointers = engine_pointers();
 
-		*pointers.channel_flag = true;
-		*pointers.internal_flag = true;
+		for (std::size_t index = 0; index < pointers.flag_count; ++index)
+			*pointers.flags[index] = true;
 
 		return rml::Hooking::get_original<&is_internal>()();
 	}

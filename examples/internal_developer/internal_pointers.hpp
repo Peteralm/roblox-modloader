@@ -3,19 +3,40 @@
 #include "RobloxModLoader/memory/batch.hpp"
 #include "RobloxModLoader/memory/module.hpp"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
 
 namespace internal_developer
 {
+	inline constexpr std::size_t max_internal_flags = 4;
+
 	struct EnginePointers
 	{
 		void* is_internal{nullptr};
-		bool* channel_flag{nullptr};
-		bool* internal_flag{nullptr};
+		std::array<bool*, max_internal_flags> flags{};
+		std::size_t flag_count{0};
+
+		bool add_flag(bool* const flag) noexcept
+		{
+			if (flag == nullptr || flag_count == flags.size())
+				return false;
+
+			for (std::size_t index = 0; index < flag_count; ++index)
+			{
+				if (flags[index] == flag)
+					return false;
+			}
+
+			flags[flag_count++] = flag;
+			return true;
+		}
 
 		[[nodiscard]] bool complete() const noexcept
 		{
-			return is_internal != nullptr && channel_flag != nullptr && internal_flag != nullptr;
+			return is_internal != nullptr && flag_count != 0;
 		}
 	};
 
