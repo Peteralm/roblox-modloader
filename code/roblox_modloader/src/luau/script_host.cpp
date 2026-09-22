@@ -291,7 +291,7 @@ namespace rml::luau
 
 		auto* co = thread->get();
 
-		vm::set_identity(co, RBX::Security::Permissions::RobloxEngine, RBX::Security::FULL_CAPABILITIES, false);
+		vm::set_identity(co, RBX::Security::Permissions::RobloxEngine, RBX::Security::FULL_CAPABILITIES);
 
 		const auto label = std::format("script '{}'", chunk.chunk_name);
 		const auto wrapped = push_xpcall(co);
@@ -339,7 +339,7 @@ namespace rml::luau
 
 		auto* co = thread->get();
 
-		vm::set_identity(co, RBX::Security::Permissions::RobloxEngine, RBX::Security::FULL_CAPABILITIES, false);
+		vm::set_identity(co, RBX::Security::Permissions::RobloxEngine, RBX::Security::FULL_CAPABILITIES);
 
 		const auto label = std::string{"a script callback"};
 		const auto wrapped = push_xpcall(co);

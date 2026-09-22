@@ -85,6 +85,12 @@ namespace rml::dotnet
 
 	void invoke_reflection_function(RBX::Reflection::DescribedBase* instance, const RBX::Reflection::FunctionDescriptor& descriptor, const InteropVariant* args, const uint32_t arg_count, InteropVariant& out)
 	{
+		// A member reached through the name lookup is not necessarily a plain function: yield
+		// functions and custom invokers keep no native member pointer, and calling that slot
+		// jumps to address zero and takes Studio down with it.
+		if (!descriptor.invoke_func_ptr)
+			throw std::runtime_error(std::format("'{}' has no native function pointer; it is not callable as a plain function",
+			    descriptor.name.c_str()));
 
 		DotNetArguments arguments{args, arg_count, &descriptor.get_signature()};
 

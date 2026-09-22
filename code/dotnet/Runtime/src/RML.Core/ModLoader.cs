@@ -83,6 +83,12 @@ internal static class ModLoader
                 }
             }
         }
+        catch (BadImageFormatException)
+        {
+            // A mod folder also carries its native dependencies; they are not assemblies and the
+            // loader has no way of telling before trying.
+            RuntimeLog.Debug($"Skipping {path}: not a managed assembly.");
+        }
         catch (Exception e)
         {
             RuntimeLog.Error($"Failed to load mod at {path}: {e}");
