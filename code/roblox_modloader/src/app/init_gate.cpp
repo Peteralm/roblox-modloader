@@ -81,6 +81,11 @@ namespace rml
 
 	void InitGate::mark_mods_loaded()
 	{
+		// Releasing a latch nobody is waiting on means the engine ran RBX::globalInit before the
+		// detour was armed: every on_init is dropped, and without this line it happens in silence.
+		if (m_latch.state() == InitGateState::Waiting)
+			RML_WARN("Mods finished loading but RBX::globalInit was never reached; on_init will not run this session");
+
 		m_latch.release();
 	}
 

@@ -101,7 +101,7 @@ void on_init(rml::InitContext& context) override
 {
     context.define_class<MyThing>("MyThing", "Instance")
         .property("Speed", &MyThing::speed)
-        .finish();
+        .commit();
 }
 ```
 

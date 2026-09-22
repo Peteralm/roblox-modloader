@@ -44,17 +44,15 @@ Once loaded, the core:
 ## Global init
 
 Some work has to happen before Studio finishes starting: a class the engine did not ship can only
-be added while the class registry is still open. The core therefore detours a function Studio runs
-during its own global initialisation, resolves that site from an embedded per-build profile
-(`compatibility/studio-*.toml`), and runs every mod whose manifest asks for the `global_init`
-phase.
+be added while the class registry is still open. The core hooks `RBX::globalInit` itself and parks
+that engine thread there until the loader finished loading every mod
+(`developer.init_gate_timeout_seconds`, 30 s by default), then calls `ModBase::on_init` on each of
+them and lets the engine continue.
 
-At that point almost nothing exists — no logger, no .NET runtime, no DataModel — so this path is
-deliberately narrow: a C ABI, a file-backed log callback, and a descriptor registration API that
-reserves classes in one batch and publishes them in one commit. Every write is validated against
-the live registry's own shape rather than a hard-coded offset, so an unrecognised layout refuses
-the reservation instead of corrupting the registry. Mods entered here are pinned and re-enter the
-normal lifecycle later.
+`InitContext` is what a mod gets in that window: `define_class` registers a class through the
+engine's own creation path, `extend_class` adds members to a class the engine already has. Both
+are valid only while `on_init` runs. An exception from one mod is caught and logged, the rest
+still run, and the engine is released either way.
 
 ## The managed runtime
 

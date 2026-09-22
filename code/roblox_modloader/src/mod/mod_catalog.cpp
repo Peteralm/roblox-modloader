@@ -503,17 +503,21 @@ namespace rml
 		// refused by path, so the log says which folder to move out.
 		std::vector<ModDefinition> unique_mods;
 		unique_mods.reserve(result.mods.size());
-		std::vector<std::string_view> claimed;
+		std::vector<std::pair<std::string_view, const std::filesystem::path*>> claimed;
 		claimed.reserve(result.mods.size());
 		for (auto& mod : result.mods)
 		{
-			if (std::ranges::find(claimed, std::string_view{mod.name}) != claimed.end())
+			const auto taken = std::ranges::find_if(claimed, [&mod](const auto& entry) {
+				return entry.first == std::string_view{mod.name};
+			});
+			if (taken != claimed.end())
 			{
-				result.errors.push_back({mod.root, "another mod folder already claims the identity '" + mod.name + "'; move this one out of mods/"});
+				result.errors.push_back({mod.root,
+				    "'" + taken->second->string() + "' already claims the identity '" + mod.name + "'; move this folder out of mods/"});
 				continue;
 			}
 			unique_mods.push_back(std::move(mod));
-			claimed.emplace_back(unique_mods.back().name);
+			claimed.emplace_back(unique_mods.back().name, &unique_mods.back().root);
 		}
 		result.mods = std::move(unique_mods);
 		return result;
