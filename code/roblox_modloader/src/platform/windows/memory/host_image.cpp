@@ -37,48 +37,4 @@ namespace rml::platform
 	{
 		return 0x140000000;
 	}
-
-	namespace
-	{
-		struct WindowSearch
-		{
-			DWORD process_id;
-			HWND found;
-		};
-
-		BOOL CALLBACK pick_process_window(HWND window, const LPARAM parameter)
-		{
-			auto* search = reinterpret_cast<WindowSearch*>(parameter);
-
-			DWORD owner = 0;
-			GetWindowThreadProcessId(window, &owner);
-
-			if (owner != search->process_id || !IsWindowVisible(window) || GetWindow(window, GW_OWNER) != nullptr)
-				return TRUE;
-
-			search->found = window;
-			return FALSE;
-		}
-	}
-
-	void* acquire_main_window()
-	{
-		// Studio's window is the one we want, and it is not always the desktop's foreground window:
-		// a Studio started in the background, or one launched by a tool, never takes focus. Asking
-		// the OS for our own top-level window answers the question that was actually being asked.
-		WindowSearch search{GetCurrentProcessId(), nullptr};
-
-		for (int attempt = 0; attempt < 100 && !search.found; ++attempt)
-		{
-			EnumWindows(&pick_process_window, reinterpret_cast<LPARAM>(&search));
-
-			if (!search.found)
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		}
-
-		if (!search.found)
-			throw std::runtime_error("Failed to find Roblox Studio window: this process has no visible top-level window");
-
-		return search.found;
-	}
 }
