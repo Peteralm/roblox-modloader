@@ -495,4 +495,21 @@ namespace rml::platform
 	{
 		return windows::EarlyBootstrap::state() == windows::BootstrapState::Completed;
 	}
+
+	const char* global_init_phase_diagnostic() noexcept
+	{
+		return windows::EarlyBootstrap::diagnostic();
+	}
+
+	bool wait_for_global_init_phase(const unsigned timeout_ms) noexcept
+	{
+		constexpr unsigned poll_interval_ms = 5;
+		unsigned waited = 0;
+		while (windows::EarlyBootstrap::state() == windows::BootstrapState::Armed && waited < timeout_ms)
+		{
+			Sleep(poll_interval_ms);
+			waited += poll_interval_ms;
+		}
+		return global_init_phase_completed();
+	}
 } // namespace rml::platform

@@ -9,4 +9,14 @@ namespace rml::platform
 	{
 		return false;
 	}
+
+	const char* global_init_phase_diagnostic() noexcept
+	{
+		return "macOS has no global-init window";
+	}
+
+	bool wait_for_global_init_phase(unsigned) noexcept
+	{
+		return false;
+	}
 } // namespace rml::platform

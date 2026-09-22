@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iterator>
+#include <ranges>
 
 RML_LOG_SCOPE("ModManager");
 
@@ -51,18 +52,25 @@ namespace rml
 		auto errors = load_catalog(catalog, native, dotnet, config::ModLoadPhase::Normal);
 
 		// A global-init mod is already inside the process; this pass only starts its
-		// ordinary lifecycle. Without that phase there is nothing to adopt.
-		if (platform::global_init_phase_completed())
+		// ordinary lifecycle. The loader runs on its own thread and gets here while
+		// Studio is still starting, so the phase is waited for instead of sampled:
+		// sampling makes adoption a coin flip between the two threads.
+		constexpr unsigned bootstrap_timeout_ms = 30000;
+		const auto global_init_mod = [](const ModDefinition& mod) {
+			return mod.enabled && mod.auto_load && mod.load_phase == config::ModLoadPhase::GlobalInit;
+		};
+		if (std::ranges::any_of(catalog.mods, global_init_mod))
 		{
-			auto adopted = load_catalog(catalog, native, dotnet, config::ModLoadPhase::GlobalInit);
-			errors.insert(errors.end(), std::make_move_iterator(adopted.begin()), std::make_move_iterator(adopted.end()));
-		}
-		else
-		{
-			for (const auto& mod : catalog.mods)
+			if (platform::wait_for_global_init_phase(bootstrap_timeout_ms))
 			{
-				if (mod.enabled && mod.auto_load && mod.load_phase == config::ModLoadPhase::GlobalInit)
-					errors.push_back("Global-init bootstrap did not complete for " + mod.root.string());
+				auto adopted = load_catalog(catalog, native, dotnet, config::ModLoadPhase::GlobalInit);
+				errors.insert(errors.end(), std::make_move_iterator(adopted.begin()), std::make_move_iterator(adopted.end()));
+			}
+			else
+			{
+				const std::string reason = platform::global_init_phase_diagnostic();
+				for (const auto& mod : catalog.mods | std::views::filter(global_init_mod))
+					errors.push_back("Global-init bootstrap did not complete for " + mod.root.string() + ": " + reason);
 			}
 		}
 
