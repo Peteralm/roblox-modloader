@@ -63,7 +63,8 @@ TEST_CASE("adorn interface keeps the dumped slot order")
 {
 	using namespace RBX;
 #if defined(_WIN32)
-	// Everything that holds a std::string or a std::mutex grows on the MSVC standard library.
+	// Adorn carries a std::unordered_map (adorn.hpp:205), which is 64 bytes on MSVC against
+	// libc++'s 40; AdornRender grows for the same reason.
 	static_assert(sizeof(Adorn) == 168);
 	static_assert(sizeof(Graphics::AdornRender) == 2776);
 #else
