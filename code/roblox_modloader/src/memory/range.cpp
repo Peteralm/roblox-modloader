@@ -23,6 +23,24 @@ namespace rml::memory
 		constexpr std::uint32_t adrp_value = 0x90000000;
 		constexpr std::size_t instruction_length = 4;
 		constexpr std::size_t adrp_pair_length = 8;
+
+		// The instruction that applies the page offset: an unsigned-offset load/store or an
+		// add immediate, reading the register the adrp wrote.
+		constexpr std::uint32_t load_store_mask = 0x3B000000;
+		constexpr std::uint32_t load_store_value = 0x39000000;
+		constexpr std::uint32_t add_immediate_mask = 0xFF800000;
+		constexpr std::uint32_t add_immediate_value = 0x91000000;
+		constexpr std::uint32_t register_mask = 0x1F;
+		constexpr std::uint32_t source_register_shift = 5;
+
+		[[maybe_unused]] bool completes_adrp(const std::uint32_t adrp, const std::uint32_t paired)
+		{
+			if (((paired >> source_register_shift) & register_mask) != (adrp & register_mask))
+				return false;
+
+			return (paired & load_store_mask) == load_store_value ||
+			       (paired & add_immediate_mask) == add_immediate_value;
+		}
 	}
 
 	range::range(handle base, std::size_t size) :
@@ -123,7 +141,8 @@ namespace rml::memory
 		if (text.empty())
 			return results;
 
-		// The terminator is part of the needle so that "[Internal]" never matches "[Internal]Foo".
+		// Both terminators are part of the needle: "[Internal]" must not match the tail of
+		// "Foo[Internal]" nor the head of "[Internal]Foo".
 		const std::size_t length = text.size() + 1;
 		if (m_size < length)
 			return results;
@@ -134,6 +153,9 @@ namespace rml::memory
 		for (std::size_t offset = 0; offset <= scan_end; ++offset)
 		{
 			if (bytes[offset] != text.front())
+				continue;
+
+			if (offset != 0 && bytes[offset - 1] != '\0')
 				continue;
 
 			if (std::memcmp(bytes + offset, text.data(), text.size()) != 0)
@@ -190,7 +212,9 @@ namespace rml::memory
 
 		return results;
 #elif defined(__aarch64__) || defined(_M_ARM64)
-		// adrp xN, page followed by the add/ldr that applies the page offset.
+		// adrp xN, page followed by the add/ldr that applies the page offset. Only the
+		// immediately following instruction is decoded, and only when it reads the register
+		// the adrp wrote: an adrp whose page happens to match is not a reference.
 		std::vector<handle> results;
 
 		if (m_size < adrp_pair_length)
@@ -202,7 +226,12 @@ namespace rml::memory
 		for (std::size_t offset = 0; offset <= scan_end; offset += instruction_length)
 		{
 			const auto instruction = m_base.add(offset);
-			if ((instruction.as<const std::uint32_t&>() & adrp_mask) != adrp_value)
+			const auto* const instructions = instruction.as<const std::uint32_t*>();
+
+			if ((instructions[0] & adrp_mask) != adrp_value)
+				continue;
+
+			if (!completes_adrp(instructions[0], instructions[1]))
 				continue;
 
 			if (instruction.adrp().as<std::uintptr_t>() != wanted)

@@ -99,7 +99,12 @@ const rml::memory::module studio{rml::platform::studio_image_name()};
 
 // Exactly one literal and exactly one instruction loading it, or the mod refuses to run.
 const auto markers = studio.scan_strings("[Internal]", 2);
+if (markers.size() != 1)
+    return; // 0 means the anchor is gone, 2 means it is ambiguous — never guess.
+
 const auto references = studio.scan_references(markers.front(), 2);
+if (references.size() != 1)
+    return;
 ```
 
 `scan_references` decodes whatever the architecture uses to materialize an address:
