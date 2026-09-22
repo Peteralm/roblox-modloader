@@ -2,6 +2,7 @@
 
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/memory/module.hpp"
+#include "app/init_gate.hpp"
 #include "mod/mod_kind.hpp"
 
 RML_LOG_SCOPE("NativeModLoader");
@@ -31,62 +32,46 @@ namespace rml::native
 		using start_fn_t = ModBase::start_type;
 		using uninstall_fn_t = void (*)(const ModBase*);
 
-		std::unique_ptr<memory::module> module_ptr;
-		std::filesystem::path mod_root;
-		start_fn_t start = nullptr;
-		uninstall_fn_t uninstall = nullptr;
-		bool pinned = false;
-		if (m_early_registry.status(path) != EarlyModStatus::NotFound)
+		auto module_ptr = std::make_unique<memory::module>(path);
+		if (auto r = module_ptr->attach(); !r)
 		{
-			auto adoption = m_early_registry.adopt(path);
-			if (!adoption)
-				return std::unexpected(adoption.error());
-			module_ptr = std::move(adoption->module);
-			mod_root = std::move(adoption->root);
-			pinned = true;
-			start = adoption->start;
-			uninstall = adoption->uninstall;
+			return std::unexpected(std::format("Failed to attach module '{}' : {}", path.string(), r.error()));
 		}
-		else
+
+		auto start_h = module_ptr->get_export("start_mod");
+		auto uninstall_h = module_ptr->get_export("uninstall_mod");
+		auto abi_version_h = module_ptr->get_export("rml_abi_version");
+
+		if (!start_h)
 		{
-			mod_root = mod_root_for(path);
-			module_ptr = std::make_unique<memory::module>(path);
-			if (auto r = module_ptr->attach(); !r)
-			{
-				return std::unexpected(std::format("Failed to attach module '{}' : {}", path.string(), r.error()));
-			}
-
-			auto start_h = module_ptr->get_export("start_mod");
-			auto uninstall_h = module_ptr->get_export("uninstall_mod");
-			auto abi_version_h = module_ptr->get_export("rml_abi_version");
-
-			if (!start_h)
-			{
-				module_ptr->detach();
-				return std::unexpected("Failed to find 'start_mod' export in native mod: " + path.string());
-			}
-
-			if (!uninstall_h)
-			{
-				module_ptr->detach();
-				return std::unexpected("Failed to find 'uninstall_mod' export in native mod: " + path.string());
-			}
-
-			if (!abi_version_h)
-			{
-				module_ptr->detach();
-				return std::unexpected(std::format("Native mod '{}' does not export 'rml_abi_version' (expected RML_ABI_VERSION={}); rebuild it against the current RobloxModLoader SDK", path.string(), RML_ABI_VERSION));
-			}
-
-			if (const int mod_abi_version = abi_version_h.as<rml_abi_version_type>()(); mod_abi_version != RML_ABI_VERSION)
-			{
-				module_ptr->detach();
-				return std::unexpected(std::format("Native mod '{}' was built against RML_ABI_VERSION={} but the loader is RML_ABI_VERSION={}; rebuild the mod", path.string(), mod_abi_version, RML_ABI_VERSION));
-			}
-
-			start = start_h.as<start_fn_t>();
-			uninstall = uninstall_h.as<uninstall_fn_t>();
+			module_ptr->detach();
+			return std::unexpected("Failed to find 'start_mod' export in native mod: " + path.string());
 		}
+
+		if (!uninstall_h)
+		{
+			module_ptr->detach();
+			return std::unexpected("Failed to find 'uninstall_mod' export in native mod: " + path.string());
+		}
+
+		if (!abi_version_h)
+		{
+			module_ptr->detach();
+			return std::unexpected(std::format(
+			    "Native mod '{}' does not export 'rml_abi_version' (expected RML_ABI_VERSION={}); rebuild it against the current RobloxModLoader SDK",
+			    path.string(), RML_ABI_VERSION));
+		}
+
+		if (const int mod_abi_version = abi_version_h.as<rml_abi_version_type>()(); mod_abi_version != RML_ABI_VERSION)
+		{
+			module_ptr->detach();
+			return std::unexpected(std::format(
+			    "Native mod '{}' was built against RML_ABI_VERSION={} but the loader is RML_ABI_VERSION={}; rebuild the mod",
+			    path.string(), mod_abi_version, RML_ABI_VERSION));
+		}
+
+		auto* start = start_h.as<start_fn_t>();
+		auto* uninstall = uninstall_h.as<uninstall_fn_t>();
 
 		ModBase* instance = nullptr;
 		try
@@ -95,19 +80,17 @@ namespace rml::native
 		}
 		catch (...)
 		{
-			if (!pinned)
-				module_ptr->detach();
+			module_ptr->detach();
 			return std::unexpected("Exception while calling 'start_mod' for: " + path.string());
 		}
 
 		if (!instance)
 		{
-			if (!pinned)
-				module_ptr->detach();
+			module_ptr->detach();
 			return std::unexpected("start_mod returned null for: " + path.string());
 		}
 
-		instance->set_paths(rml::mod::ModPaths(std::move(mod_root)));
+		instance->set_paths(rml::mod::ModPaths(mod_root_for(path)));
 		instance->set_event_manager(m_event_manager);
 
 		try
@@ -117,23 +100,27 @@ namespace rml::native
 		catch (const std::exception& e)
 		{
 			uninstall(instance);
-			if (!pinned)
-				module_ptr->detach();
+			module_ptr->detach();
 			return std::unexpected(std::format("Exception while calling 'on_load' for {}: {}", path.string(), e.what()));
 		}
 		catch (...)
 		{
 			uninstall(instance);
-			if (!pinned)
-				module_ptr->detach();
+			module_ptr->detach();
 			return std::unexpected(std::format("Unknown exception while calling 'on_load' for {}", path.string()));
+		}
+
+		if (const auto gate = InitGate::instance())
+		{
+			gate->register_callback(instance->name, [instance](InitContext& context) {
+				instance->on_init(context);
+			});
 		}
 
 		ModRegistry::Entry entry{};
 		entry.module = std::move(module_ptr);
 		entry.instance = instance;
 		entry.uninstall = uninstall;
-		entry.pinned = pinned;
 
 		m_registry.insert(path, std::move(entry));
 		return {};
@@ -141,8 +128,6 @@ namespace rml::native
 
 	std::expected<void, std::string> NativeModLoader::unload(const std::filesystem::path& path)
 	{
-		if (m_early_registry.is_pinned(path))
-			return std::unexpected("Global-init modules are pinned until process exit");
 		auto extracted = m_registry.extract(path);
 		if (!extracted.has_value())
 			return {};
@@ -199,7 +184,7 @@ namespace rml::native
 
 	void NativeModLoader::unload_all()
 	{
-		for (auto& [module, instance, uninstall, pinned] : m_registry.extract_unpinned())
+		for (auto& [module, instance, uninstall] : m_registry.extract_all())
 		{
 			if (instance)
 			{

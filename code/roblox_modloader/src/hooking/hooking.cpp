@@ -13,9 +13,11 @@ RML_LOG_SCOPE("Hooking");
 namespace rml
 {
 	Hooking::Hooking() :
-	    m_hook_engine(create_hook_engine())
+	    m_hook_engine(g_hook_engine ? nullptr : create_hook_engine()),
+	    m_owns_engine(m_hook_engine != nullptr)
 	{
-		g_hook_engine = m_hook_engine.get();
+		if (m_owns_engine)
+			g_hook_engine = m_hook_engine.get();
 
 		RML_INFO("Initializing hooking");
 
@@ -52,6 +54,9 @@ namespace rml
 #endif
 		DetourHookHelper::add<Hooks::build_menu_bar_from_dom>("MENU_BUILD_FROM_DOM", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.build_menu_bar_from_dom));
 
+		if (g_pointers->m_roblox_pointers.creatable_get_creator)
+			DetourHookHelper::add<Hooks::creatable_get_creator>("CREATABLE_GET_CREATOR", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.creatable_get_creator));
+
 		g_hooking = this;
 	}
 
@@ -63,7 +68,8 @@ namespace rml
 		}
 
 		g_hooking = nullptr;
-		g_hook_engine = nullptr;
+		if (m_owns_engine)
+			g_hook_engine = nullptr;
 	}
 
 	void Hooking::enable()
@@ -83,7 +89,8 @@ namespace rml
 				RML_ERROR("Failed to enable detour hook: {}", result.error().describe());
 		}
 
-		m_hook_engine->apply_queued();
+		if (g_hook_engine)
+			g_hook_engine->apply_queued();
 
 		m_enabled = true;
 	}
@@ -107,8 +114,8 @@ namespace rml
 				RML_WARN("Failed to disable detour hook: {}", result.error().describe());
 		}
 
-		if (m_hook_engine)
-			m_hook_engine->apply_queued();
+		if (g_hook_engine)
+			g_hook_engine->apply_queued();
 
 		m_detour_hook_helpers.clear();
 	}
@@ -126,18 +133,21 @@ namespace rml
 	void Hooking::DetourHookHelper::enable_hook_if_hooking_is_already_running() const
 	{
 		if (g_hooking && g_hooking->m_enabled)
+			enable_now();
+	}
+
+	void Hooking::DetourHookHelper::enable_now() const
+	{
+		if (m_on_hooking_available)
 		{
-			if (m_on_hooking_available)
-			{
-				m_detour_hook->set_target_and_create_hook(m_on_hooking_available());
-			}
-
-			if (const auto result = m_detour_hook->enable(); !result)
-				RML_ERROR("Failed to enable late-registered detour hook: {}", result.error().describe());
-
-			if (g_hook_engine)
-				g_hook_engine->apply_queued();
+			m_detour_hook->set_target_and_create_hook(m_on_hooking_available());
 		}
+
+		if (const auto result = m_detour_hook->enable(); !result)
+			RML_ERROR("Failed to enable detour hook '{}' immediately: {}", m_detour_hook->name(), result.error().describe());
+
+		if (g_hook_engine)
+			g_hook_engine->apply_queued();
 	}
 
 }

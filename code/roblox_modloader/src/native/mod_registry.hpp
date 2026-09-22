@@ -20,14 +20,12 @@ namespace rml::native
 			ModBase* instance = nullptr;
 			using uninstall_t = void (*)(const ModBase*);
 			uninstall_t uninstall = nullptr;
-			bool pinned = false;
 		};
 
 		[[nodiscard]] bool contains(const std::filesystem::path& path) const;
 		void insert(const std::filesystem::path& path, Entry entry);
 		[[nodiscard]] std::optional<Entry> extract(const std::filesystem::path& path);
-		// Pinned instances stay registered and alive even during loader teardown.
-		[[nodiscard]] std::vector<Entry> extract_unpinned();
+		[[nodiscard]] std::vector<Entry> extract_all();
 
 	private:
 		mutable std::shared_mutex m_mutex;

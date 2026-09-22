@@ -1,5 +1,6 @@
 #pragma once
 #include "flyweight.hpp"
+#include "time.hpp"
 #include "reflection/object.hpp"
 #include "security/script_permissions.hpp"
 #include "slots_holder.hpp"
@@ -17,7 +18,6 @@ namespace RBX
 	class ComponentMap;
 	class EngineContext;
 	class RemoteInvocationMetadata;
-	class Time;
 
 	namespace DataModelChangeTracking
 	{
@@ -51,47 +51,117 @@ namespace RBX
 	{
 	public:
 		virtual void write_all_properties_for_change_tracking(
-		    DataModelChangeTracking::ChangeTracker* tracker, DataModelChangeTracking::DeltaTypeTag tag) = 0;
+		    DataModelChangeTracking::ChangeTracker* tracker, DataModelChangeTracking::DeltaTypeTag tag)
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual void deprecated_predelete() = 0;
+		virtual void deprecated_predelete()
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual void on_property_changed(const Reflection::PropertyDescriptor& descriptor) = 0;
+		virtual void on_property_changed(const Reflection::PropertyDescriptor& descriptor)
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual void on_guid_changed() = 0;
+		virtual void on_guid_changed()
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual bool security_check(const Security::Context& context) const = 0;
+		virtual bool security_check(const Security::Context& context) const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual bool security_check_permission_level_only(const Security::Context& context) const = 0;
+		virtual bool security_check_permission_level_only(const Security::Context& context) const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual bool security_check_capabilities(Security::Capabilities capabilities) const = 0;
+		virtual bool security_check_capabilities(Security::Capabilities capabilities) const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
 		virtual bool security_check_capabilities_permission_level_only(
-		    Security::Capabilities capabilities) const = 0;
+		    Security::Capabilities capabilities) const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual Actor* get_actor() = 0;
+		virtual Actor* get_actor()
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual void set_modified_flag(const Reflection::PropertyDescriptor* descriptor, bool modified) = 0;
+		virtual void set_modified_flag(const Reflection::PropertyDescriptor* descriptor, bool modified)
+		{
+			rml::engine_virtual_unreachable();
+		}
 
 		virtual bool filter_event_invocation(const Reflection::EventDescriptor& descriptor,
-		    const RemoteInvocationMetadata& metadata, Reflection::SystemAddress source) = 0;
+		    const RemoteInvocationMetadata& metadata, Reflection::SystemAddress source)
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual void* to_content_ownership() = 0;
+		virtual void* to_content_ownership()
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual std::string get_object_name() const = 0;
+		virtual std::string get_object_name() const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual std::string get_full_name() const = 0;
+		virtual std::string get_full_name() const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual void record_property_update_if_eligible(Time when, const std::string& property) = 0;
+		virtual void record_property_update_if_eligible(Time when, const std::string& property)
+		{
+			rml::engine_virtual_unreachable();
+		}
 
 		virtual void raise_property_changed_post_virtual(
-		    const Reflection::PropertyDescriptor& descriptor) = 0;
+		    const Reflection::PropertyDescriptor& descriptor)
+		{
+			rml::engine_virtual_unreachable();
+		}
 
 		GuidItem<Object> guid;
-		std::unique_ptr<ComponentMap> components;
-		std::unique_ptr<details::AttributesAndTags> attributes_and_tags;
-		boost::intrusive_ptr<rbx::signals::slots_holder> ancestry_changed_slots;
-		boost::intrusive_ptr<rbx::signals::slots_holder> property_changed_slots;
+		union
+		{
+			std::unique_ptr<ComponentMap> components;
+		};
+		union
+		{
+			std::unique_ptr<details::AttributesAndTags> attributes_and_tags;
+		};
+		union
+		{
+			boost::intrusive_ptr<rbx::signals::slots_holder> ancestry_changed_slots;
+		};
+		union
+		{
+			boost::intrusive_ptr<rbx::signals::slots_holder> property_changed_slots;
+		};
 		EngineContext* engine_context;
+
+	protected:
+		Object()
+		{
+		}
+
+	public:
+		~Object() override
+		{
+		}
 	};
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()

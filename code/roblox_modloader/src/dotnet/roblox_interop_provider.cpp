@@ -2,6 +2,8 @@
 #include "RobloxModLoader/memory/foreign_call.hpp"
 #include "roblox_interop_provider.hpp"
 
+#include "pointers.hpp"
+
 #include "RobloxModLoader/logger/logger.hpp"
 #include "RobloxModLoader/roblox/data_model.hpp"
 #include "RobloxModLoader/roblox/reflection/function_descriptor.hpp"
@@ -87,8 +89,12 @@ namespace rml::dotnet
 	{
 		// A member reached through the name lookup is not necessarily a plain function: yield
 		// functions and custom invokers keep no native member pointer, and calling that slot
-		// jumps to address zero and takes Studio down with it.
-		if (!descriptor.invoke_func_ptr)
+		// jumps to address zero and takes Studio down with it. The pointer lives on the bound
+		// descriptor, which only a Default-kind function is.
+		const auto* bound = descriptor.get_kind() == RBX::Reflection::FunctionDescriptor::Default
+		    ? static_cast<const RBX::Reflection::BoundFunctionDescriptor*>(&descriptor)
+		    : nullptr;
+		if (!bound || !bound->invoke_func_ptr)
 			throw std::runtime_error(std::format("'{}' has no native function pointer; it is not callable as a plain function",
 			    descriptor.name.c_str()));
 
@@ -346,7 +352,7 @@ namespace rml::dotnet
 
 				auto holder = std::make_unique<ManagedEventConnection>();
 				holder->slot = slot;
-				holder->connection = event_descriptor->connect(instance, slot);
+				holder->connection = event_descriptor->connect_generic(instance, slot);
 
 				return reinterpret_cast<uintptr_t>(holder.release());
 			}
@@ -523,7 +529,7 @@ namespace rml::dotnet
 					return;
 
 				auto event_args = build_event_fire_args(descriptor, args, arg_count);
-				descriptor->fire_event(instance, event_args);
+				descriptor->fire_event_generic(instance, event_args);
 				release_fire_args(event_args);
 			}
 			catch (const std::exception& e)

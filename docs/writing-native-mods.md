@@ -87,37 +87,28 @@ down manually in `on_unload`. Resolve `target_address` from the engine yourself 
 pattern scan or a known offset); see [`examples/internal_developer`](../examples/internal_developer)
 for a working hook.
 
-## Global-init mods
+## Running inside RBX::globalInit
 
-A mod whose manifest declares `load_phase = "global_init"` is entered before Studio builds its
-class registry, through two extra exports:
+Override `on_init` and the loader calls it from inside the engine's own `RBX::globalInit`, before
+Studio freezes its class registry. The gate holds that engine thread until every mod finished
+loading (`developer.init_gate_timeout_seconds`, 30 s by default), so an ordinary mod needs no
+manifest flag and no extra export:
 
 ```cpp
-#include <RobloxModLoader/mod/global_init_mod.hpp>
+#include <RobloxModLoader/mod/init_context.hpp>
 
-RML_EXPORT_GLOBAL_INIT_ABI_VERSION()
-
-extern "C" RML_GLOBAL_INIT_EXPORT int rml_global_init(const RmlGlobalInitContext* context) noexcept
+void on_init(rml::InitContext& context) override
 {
-    // Never let an exception cross this boundary; return nonzero to fail.
+    context.define_class<MyThing>("MyThing", "Instance")
+        .property("Speed", &MyThing::speed)
+        .finish();
 }
 ```
 
-`context->descriptors` is the only way to add a class the engine did not ship. It is valid for the
-duration of the call and nowhere else:
+`define_class` registers a class the engine did not ship; `extend_class` adds members to one it
+did. Both are valid only while `on_init` runs — `context.is_open()` is false everywhere else.
+An exception thrown here is caught and logged per mod, and the remaining mods still run.
 
-- `find_class(name)` returns a live class descriptor, or `nullptr`.
-- `begin_batch(count)` opens a reservation; `reserve_class` validates and stages one class;
-  `abort_batch` discards the whole reservation; `commit_batch` publishes it and cannot fail.
-
-Reserve every class first and commit once. `reserve_class` returns nonzero on refusal: `1` for a
-malformed payload, `2` for a name collision or a descriptor whose own name does not match, `3` for
-a duplicate within the batch, and `4` for a missing base class.
-
-A reserved class is visible to reflection, but `Instance.new` on it is not supported yet: on
-Studio 0.739 a descriptor carries no creation function of its own, so a descriptor copied from an
-existing class cannot become buildable by editing its fields. Treat this API as class *metadata*
-registration until the engine's creation path is mapped.
 ## Finding the target
 
 A byte signature pins the instructions the compiler happened to emit, so it dies on the update that

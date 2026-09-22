@@ -47,6 +47,7 @@ struct RobloxPointers
 	void* resume_waiting_scripts;
 
 	functions::get_string_atom get_string_atom;
+	functions::name_declare name_declare;
 	functions::descriptor_lookup descriptor_lookup;
 	
 	std::uint64_t member_table_offset;
@@ -152,6 +153,17 @@ struct RobloxPointers
 	functions::signal_disconnect signal_disconnect;
 	functions::signal_slot_free signal_slot_free;
 	functions::signal_mutex_get signal_mutex_get;
+	functions::slots_holder_release slots_holder_release;
+
+	functions::global_init global_init;
+	functions::class_descriptor_ctor class_descriptor_ctor;
+	functions::class_descriptor_all_classes class_descriptor_all_classes;
+	functions::creatable_get_creator creatable_get_creator;
+	functions::instance_ctor instance_ctor;
+	functions::create_instance_impl create_instance_impl;
+	functions::property_descriptor_ctor property_descriptor_ctor;
+	functions::function_descriptor_ctor function_descriptor_ctor;
+	functions::event_descriptor_ctor event_descriptor_ctor;
 
 	const std::vector<const RBX::Reflection::Type*>* type_registry;
 };

@@ -1,7 +1,6 @@
 #include "mod_manager.hpp"
 
 #include "RobloxModLoader/internal/common.hpp"
-#include "RobloxModLoader/platform/core/early_phase.hpp"
 #include "dotnet/dotnet_mod_loader.hpp"
 #include "filesystem/directory.hpp"
 #include "mod_catalog.hpp"
@@ -49,30 +48,7 @@ namespace rml
 		IModLoader* const native = loader_for(ModKind::Native);
 		IModLoader* const dotnet = loader_for(ModKind::Dotnet);
 
-		auto errors = load_catalog(catalog, native, dotnet, config::ModLoadPhase::Normal);
-
-		// A global-init mod is already inside the process; this pass only starts its
-		// ordinary lifecycle. The loader runs on its own thread and gets here while
-		// Studio is still starting, so the phase is waited for instead of sampled:
-		// sampling makes adoption a coin flip between the two threads.
-		constexpr unsigned bootstrap_timeout_ms = 30000;
-		const auto global_init_mod = [](const ModDefinition& mod) {
-			return mod.enabled && mod.auto_load && mod.load_phase == config::ModLoadPhase::GlobalInit;
-		};
-		if (std::ranges::any_of(catalog.mods, global_init_mod))
-		{
-			if (platform::wait_for_global_init_phase(bootstrap_timeout_ms))
-			{
-				auto adopted = load_catalog(catalog, native, dotnet, config::ModLoadPhase::GlobalInit);
-				errors.insert(errors.end(), std::make_move_iterator(adopted.begin()), std::make_move_iterator(adopted.end()));
-			}
-			else
-			{
-				const std::string reason = platform::global_init_phase_diagnostic();
-				for (const auto& mod : catalog.mods | std::views::filter(global_init_mod))
-					errors.push_back("Global-init bootstrap did not complete for " + mod.root.string() + ": " + reason);
-			}
-		}
+		const auto errors = load_catalog(catalog, native, dotnet);
 
 		for (const auto& error : errors)
 			RML_ERROR("{}", error);

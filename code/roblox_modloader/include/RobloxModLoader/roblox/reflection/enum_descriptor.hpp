@@ -1,8 +1,10 @@
 #pragma once
 #include "type.hpp"
 
+#include <algorithm>
 #include <functional>
 #include <map>
+#include <vector>
 
 namespace RBX::Reflection
 {
@@ -22,6 +24,8 @@ namespace RBX::Reflection
 			const EnumDescriptor& owner;
 			const int value;
 			const size_t index;
+
+			Item() = delete;
 
 			bool convert_to(Variant& value) const
 			{

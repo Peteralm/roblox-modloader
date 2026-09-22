@@ -14,7 +14,7 @@ namespace RBX::Reflection
 		typedef Callback ConstMember;
 		typedef Callback Member;
 
-	protected:
+	public:
 		SignatureDescriptor signature;
 		bool async_flag;
 
@@ -29,11 +29,11 @@ namespace RBX::Reflection
 			return async_flag;
 		}
 
-	private:
-		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_SIZE(CallbackDescriptor, 0x78);
-			RML_ASSERT_LAYOUT_OFFSET(CallbackDescriptor, signature, 0x40);
-			RML_ASSERT_LAYOUT_OFFSET(CallbackDescriptor, async_flag, 0x70);
-		RML_LAYOUT_GUARD_END()
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(CallbackDescriptor, 0x80);
+	RML_ASSERT_OFFSET(CallbackDescriptor, signature, 0x48);
+	RML_ASSERT_OFFSET(CallbackDescriptor, async_flag, 0x78);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 }

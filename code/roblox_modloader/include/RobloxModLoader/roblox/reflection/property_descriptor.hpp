@@ -14,6 +14,18 @@ namespace RBX::Reflection
 	class DescribedBase;
 	class Property;
 
+	class Variant;
+	class StyledProperties;
+	class XmlElement;
+	class IReferenceBinder;
+	class IReferenceBinderWrite;
+	enum class PropertyMetadataType : std::int32_t;
+
+	namespace detail
+	{
+		struct PropertyMetadataView;
+	}
+
 	class PropertyDescriptor : public MemberDescriptor
 	{
 	public:
@@ -22,73 +34,55 @@ namespace RBX::Reflection
 
 		enum Functionality : unsigned
 		{
-			STANDARD = 1 + 2 + 4 + 8 + 16,              // isPublic, canReplicate, canXmlRead, canXmlWrite, isScriptable
-			NO_XML_WRITE = 1 + 2 + 4 + 0 + 16,          // isPublic, canReplicate, canXmlRead,              isScriptable
-			UI = 1 + 0 + 4 + 0 + 16,                    // isPublic,              canXmlRead,              isScriptable
-			SCRIPTING = 1 + 2 + 0 + 0 + 16,             // isPublic, canReplicate,                         isScriptable
-			STREAMING = 0 + 2 + 4 + 8 + 0,              //           canReplicate, canXmlRead, canXmlWrite
-			CLUSTER = 0 + 0 + 4 + 8 + 0,                //                         canXmlRead, canXmlWrite
-			LEGACY = 0 + 0 + 4 + 0 + 0,                 //                         canXmlRead
-			REPLICATE_ONLY = 0 + 2 + 0 + 0 + 0,         //           canReplicate
-			LEGACY_SCRIPTING = 0 + 0 + 4 + 0 + 16,      //                         canXmlRead,              isScriptable
-			HIDDEN_SCRIPTING = 0 + 0 + 0 + 0 + 16,      //                                                  isScriptable
-			PUBLIC_SERIALIZED = 1 + 0 + 4 + 8 + 0,      // isPublic,              canXmlRead, canXmlWrite
-			REPLICATE_CLONE = 0 + 2 + 0 + 0 + 0 + 32,   //        canReplicate,                        alwaysClone
-			STANDARD_NO_REPLICATE = 1 + 0 + 4 + 8 + 16, // isPublic,              canXmlRead, canXmlWrite,  isScriptable
-			STANDARD_NO_SCRIPTING = 1 + 2 + 4 + 8 + 0,  // isPublic, canReplicate, canXmlRead, canXmlWrite
-			PUBLIC_REPLICATE = 1 + 2 + 0 + 0 + 0,       // isPublic, canReplicate
+			STANDARD = 1 + 2 + 4 + 8 + 16,
+			NO_XML_WRITE = 1 + 2 + 4 + 0 + 16,
+			UI = 1 + 0 + 4 + 0 + 16,
+			SCRIPTING = 1 + 2 + 0 + 0 + 16,
+			STREAMING = 0 + 2 + 4 + 8 + 0,
+			CLUSTER = 0 + 0 + 4 + 8 + 0,
+			LEGACY = 0 + 0 + 4 + 0 + 0,
+			REPLICATE_ONLY = 0 + 2 + 0 + 0 + 0,
+			LEGACY_SCRIPTING = 0 + 0 + 4 + 0 + 16,
+			HIDDEN_SCRIPTING = 0 + 0 + 0 + 0 + 16,
+			PUBLIC_SERIALIZED = 1 + 0 + 4 + 8 + 0,
+			REPLICATE_CLONE = 0 + 2 + 0 + 0 + 0 + 32,
+			STANDARD_NO_REPLICATE = 1 + 0 + 4 + 8 + 16,
+			STANDARD_NO_SCRIPTING = 1 + 2 + 4 + 8 + 0,
+			PUBLIC_REPLICATE = 1 + 2 + 0 + 0 + 0,
 		};
 
-	private:
-		char padding[0x28];
+		struct Attributes
+		{
+			Descriptor::Attributes descriptor;
+			std::uint64_t reserved_10;
+			std::uint32_t reserved_18;
+			std::uint8_t reserved_1c;
+			std::uint8_t functionality;
+			std::uint8_t reserved_1e;
+			std::uint8_t mutability;
+		};
 
-	public:
+		std::byte reserved_48[32];
 		const Type& type;
-		const bool m_is_enum;
 
-	private:
-		unsigned m_is_public : 1;
-		unsigned m_is_editable : 1;
-		unsigned m_can_replicate : 1;
-		unsigned m_can_xml_read : 1;
-		unsigned m_can_xml_write : 1;
-		unsigned m_is_scriptable : 1;
-		unsigned m_always_clone : 1;
-
-	public:
-		[[nodiscard]] bool is_public() const
-		{
-			return m_is_public != 0;
-		}
-
-		[[nodiscard]] bool is_editable() const
-		{
-			return m_is_editable != 0;
-		}
-		[[nodiscard]] bool can_replicate() const
-		{
-			return m_can_replicate != 0;
-		}
-
-		[[nodiscard]] bool can_xml_read() const
-		{
-			return m_can_xml_read != 0;
-		}
-
-		[[nodiscard]] bool can_xml_write() const
-		{
-			return m_can_xml_write != 0;
-		}
-
-		[[nodiscard]] bool is_scriptable() const
-		{
-			return m_is_scriptable != 0;
-		}
-
-		[[nodiscard]] bool always_clone() const
-		{
-			return m_always_clone != 0;
-		}
+		PropertyDescriptor() = delete;
+		std::uint64_t reserved_70;
+		Security::Permissions protection_set;
+		std::uint32_t reserved_7c;
+		std::uint32_t index;
+		std::uint16_t reserved_84;
+		std::uint16_t reserved_86;
+		std::uint8_t reserved_88;
+		std::uint8_t reserved_89;
+		bool is_enum;
+		unsigned is_public : 1;
+		unsigned is_editable : 1;
+		unsigned can_replicate : 1;
+		unsigned can_xml_read : 1;
+		unsigned can_xml_write : 1;
+		unsigned is_scriptable : 1;
+		unsigned always_clone : 1;
+		unsigned mutability : 2;
 
 		bool operator==(const PropertyDescriptor& other) const
 		{
@@ -100,56 +94,46 @@ namespace RBX::Reflection
 		}
 
 		virtual bool is_read_only() const = 0;
-
 		virtual bool is_write_only() const = 0;
-		virtual bool has_variant_accessor() const = 0;
-		virtual bool can_interpolate() const = 0;
-
-		virtual void get_from_variant_accessor(DescribedBase* instance, Variant& out) const = 0;
-
-		virtual void get_from_variant_accessor(const DescribedBase* instance, Variant& out) const = 0;
-		virtual void set_via_variant_accessor(DescribedBase* instance, const Variant& value) const = 0;
-
-		virtual int get_data_size(const DescribedBase* instance) const = 0;
-
-		virtual int _vt09_unknown_() const = 0;
-		virtual bool _vt10_unknown_() const = 0;
-		virtual bool _vt11_unknown_() const = 0;
-		virtual int _vt12_unknown_() const = 0;
-		virtual void _vt13_unknown_() const = 0;
-
+		virtual bool supports_styling() const = 0;
+		virtual bool is_styling_read_only() const = 0;
+		virtual void get_styled_variant(const DescribedBase* instance, Variant& out) const = 0;
+		virtual void get_styled_variant(const StyledProperties* styled, Variant& out) const = 0;
+		virtual void set_styled_variant(StyledProperties* styled, const Variant& value) const = 0;
+		virtual bool are_styled_variants_equal(const StyledProperties* a, const StyledProperties* b) const = 0;
+		virtual int get_large_asset_type() const = 0;
+		virtual int get_defer_behavior() const = 0;
+		virtual bool is_pull_interface() const = 0;
+		virtual void* get_pull_info_item(DescribedBase* instance) const = 0;
+		virtual void notify_pull_ready(DescribedBase* instance) const = 0;
 		virtual bool equal_values(const DescribedBase* a, const DescribedBase* b) const = 0;
-
-		virtual bool equals_typed_value(const DescribedBase* instance) const = 0;
-
+		virtual bool is_value_default_constructed(const DescribedBase* instance) const = 0;
 		virtual void get_variant(const DescribedBase* instance, Variant& out) const = 0;
-		virtual void get_variant_xml(const DescribedBase* instance, Variant& out) const = 0;
+		virtual void get_variant_with_same_type_as_property(const DescribedBase* instance, Variant& out) const = 0;
 		virtual void set_variant(DescribedBase* instance, const Variant& value) const = 0;
-		virtual void set_variant_xml(DescribedBase* instance, const Variant& value) const = 0;
-
+		virtual void set_variant_with_same_type_as_property(DescribedBase* instance, const Variant& value) const = 0;
 		virtual void copy_value(const DescribedBase* source, DescribedBase* destination) const = 0;
-
-		virtual int get_raw_data_size(const DescribedBase* instance) const = 0;
-		virtual bool is_xml_serializable() const = 0;
+		virtual int get_data_size(const DescribedBase* instance) const = 0;
+		virtual bool supports_metadata(PropertyMetadataType type) const = 0;
 		virtual bool has_string_value() const = 0;
-		virtual Name get_string_value(const DescribedBase* instance) const = 0;
+		virtual std::string get_string_value(const DescribedBase* instance) const = 0;
 		virtual bool set_string_value(DescribedBase* instance, const std::string& text) const = 0;
-		virtual bool is_type(const Type& type) const = 0;
-
-		virtual void notify_xml_change(const DescribedBase* instance) const = 0;
-		virtual void _vt28_unknown_() const = 0;
-		virtual void serialize(DescribedBase* instance, unsigned format, void* ctx) const = 0;
-
-		virtual void lua_get(lua_State* L, const DescribedBase* instance) const = 0;
-		virtual void lua_set(lua_State* L, DescribedBase* instance) const = 0;
-
-	private:
-		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_SIZE(PropertyDescriptor, 0x78);
-			RML_ASSERT_LAYOUT_OFFSET(PropertyDescriptor, padding, 0x40);
-			RML_ASSERT_LAYOUT_OFFSET(PropertyDescriptor, m_is_enum, 0x70);
-		RML_LAYOUT_GUARD_END()
+		virtual const PropertyDescriptor* get_as_delta_modifiable_prop_descriptor() const = 0;
+		virtual bool is_typed_descriptor(const Type& type) const = 0;
+		virtual void* get_metadata_value(const DescribedBase* instance, PropertyMetadataType type) const = 0;
+		virtual void set_metadata_value(DescribedBase* instance, PropertyMetadataType type, detail::PropertyMetadataView view) const = 0;
+		virtual void write_xml_value(const DescribedBase* instance, XmlElement* element, IReferenceBinderWrite& binder) const = 0;
+		virtual void read_xml_value(DescribedBase* instance, const XmlElement* element, IReferenceBinder& binder) const = 0;
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(PropertyDescriptor::Attributes, 0x20);
+	RML_ASSERT_SIZE(PropertyDescriptor, 0x90);
+	RML_ASSERT_REF_OFFSET(PropertyDescriptor, type, 0x68);
+	RML_ASSERT_OFFSET(PropertyDescriptor, protection_set, 0x78);
+	RML_ASSERT_OFFSET(PropertyDescriptor, index, 0x80);
+	RML_ASSERT_OFFSET(PropertyDescriptor, is_enum, 0x8A);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 
 	template<typename V>
 	class TypedPropertyDescriptor : public PropertyDescriptor
@@ -159,41 +143,20 @@ namespace RBX::Reflection
 		{
 		public:
 			virtual ~GetSet() = default;
-			[[nodiscard]] virtual bool is_read_only() const = 0;
-			[[nodiscard]] virtual bool is_write_only() const = 0;
-			virtual V get(const DescribedBase* instance) const = 0;
-			virtual void set(DescribedBase* instance, const V& value) const = 0;
+			virtual bool is_read_only() const = 0;
+			virtual bool is_write_only() const = 0;
+			virtual V get_value(const DescribedBase* instance) const = 0;
+			virtual void set_value(DescribedBase* instance, const V& value) const = 0;
 			virtual bool equal_values(const DescribedBase* a, const DescribedBase* b) const = 0;
-			virtual bool equals_value(const DescribedBase* instance, const V& value) const = 0;
+			virtual bool is_value_equal_to(const DescribedBase* instance, const V& value) const = 0;
 		};
 
-		class VariantAccessor
-		{
-		public:
-			virtual ~VariantAccessor() = default;
-			virtual V get(DescribedBase* instance) const = 0;
-			virtual V get(const DescribedBase* instance) const = 0;
-			virtual void set(DescribedBase* instance, const V& v) const = 0;
-			virtual int data_size(const DescribedBase* instance) const = 0;
-			virtual bool feature_check() const = 0;
-		};
+		class StyleGetSet;
 
-		class XmlLuaAccessor
-		{
-		public:
-			virtual ~XmlLuaAccessor() = default;
-			virtual bool capability_check() const = 0;
-			virtual void notify(const DescribedBase* instance) const = 0;
-			virtual void serialize(DescribedBase* instance, unsigned fmt, void* ctx) const = 0;
-		};
-
-	private:
-		char padding[0x18];
-
-	protected:
+	public:
 		std::unique_ptr<GetSet> get_set;
-		std::unique_ptr<VariantAccessor> m_variant_accessor;
-		std::unique_ptr<XmlLuaAccessor> m_xml_accessor;
+		std::unique_ptr<StyleGetSet> style_get_set;
+		std::uint64_t reserved_a0;
 
 	public:
 		[[nodiscard]] bool is_read_only() const override
@@ -207,14 +170,19 @@ namespace RBX::Reflection
 
 		V get(const DescribedBase* instance) const
 		{
-			return get_set->get(instance);
+			return get_set->get_value(instance);
 		}
 
 		void set(DescribedBase* instance, const V& value) const
 		{
-			get_set->set(instance, value);
+			get_set->set_value(instance, value);
 		}
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(TypedPropertyDescriptor<float>, 0xA8);
+	RML_ASSERT_OFFSET(TypedPropertyDescriptor<float>, get_set, 0x90);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 
 	class ConstProperty
 	{

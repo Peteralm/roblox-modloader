@@ -113,7 +113,6 @@ namespace rml
 		CHECK(mod.priority == 0);
 		CHECK(mod.enabled);
 		CHECK(mod.auto_load);
-		CHECK(mod.load_phase == config::ModLoadPhase::Normal);
 	}
 
 	TEST_CASE("mod catalog merges explicit id policy over manifest defaults")
@@ -204,7 +203,7 @@ auto_load = false
 		REQUIRE(mixed->dotnet_entries.size() == 1);
 	}
 
-	TEST_CASE("mod catalog selects global init entry without native dependencies")
+	TEST_CASE("mod catalog selects the named entry and leaves its siblings alone")
 	{
 		CatalogSandbox sandbox;
 		sandbox.file("mods/early/native/Early.dll");
@@ -212,7 +211,6 @@ auto_load = false
 		sandbox.file("mods/early/mod.toml", R"(
 name = "Early Mod"
 [runtime]
-load_phase = "global_init"
 entry = "Early.dll"
 )");
 		sandbox.file("config.toml", R"(
@@ -230,7 +228,6 @@ auto_load = false
 		REQUIRE(mod != nullptr);
 		REQUIRE(mod->native_entry.has_value());
 		CHECK(mod->native_entry->filename() == "Early.dll");
-		CHECK(mod->load_phase == config::ModLoadPhase::GlobalInit);
 		CHECK_FALSE(mod->enabled);
 		CHECK_FALSE(mod->auto_load);
 	}
@@ -275,11 +272,9 @@ auto_load = "invalid"
 		CHECK(catalog.errors.size() == 1);
 	}
 
-	TEST_CASE("mod catalog rejects unsafe and incomplete global entries")
+	TEST_CASE("mod catalog rejects an entry that escapes the native directory")
 	{
 		CatalogSandbox sandbox;
-		sandbox.file("mods/early/native/Early.dll");
-		sandbox.file("mods/early/mod.toml", "[runtime]\nload_phase='global_init'\nentry='Early.dll'\n");
 		sandbox.file("mods/traversal/native/Entry.dll");
 		sandbox.file("mods/traversal/Outside.dll");
 		sandbox.file("mods/traversal/mod.toml", "name='Traversal'\n[runtime]\nentry='../Outside.dll'\n");
@@ -287,7 +282,7 @@ auto_load = "invalid"
 		const auto catalog = discover_mods(sandbox.root());
 
 		CHECK(catalog.mods.empty());
-		CHECK(catalog.errors.size() == 2);
+		CHECK(catalog.errors.size() == 1);
 	}
 
 	TEST_CASE("mod catalog orders effective priority then canonical root path")
@@ -345,7 +340,7 @@ priority = 500
 		CHECK(catalog.errors.front().message.contains("already claims the identity"));
 	}
 
-	TEST_CASE("mod catalog manager loads exact ordered entries and defers gated roots")
+	TEST_CASE("mod catalog manager loads exact ordered entries and skips disabled roots")
 	{
 		CatalogSandbox sandbox;
 		const auto add_mixed = [&sandbox](const std::string_view id, const std::string_view native, const std::string_view managed) {
@@ -358,7 +353,7 @@ priority = 500
 		add_mixed("mixed-off", "MixedOff.dll", "MixedOff.Managed.dll");
 		sandbox.file("mods/managed-off/dotnet/ManagedOff.dll");
 		sandbox.file("mods/early/native/Early.dll");
-		sandbox.file("mods/early/mod.toml", "name='Early'\n[runtime]\nload_phase='global_init'\nentry='Early.dll'\n");
+		sandbox.file("mods/early/mod.toml", "name='Early'\n[runtime]\nentry='Early.dll'\n");
 		sandbox.file("config.toml", R"(
 [[mods]]
 id = "early"
@@ -398,7 +393,7 @@ auto_load = false
 		const auto errors = ModManager::load_catalog(catalog, &native, &dotnet);
 
 		CHECK(errors.empty());
-		CHECK(calls == std::vector<LoadCall>{{"native", "High.dll"}, {"dotnet", "High.Managed.dll"}, {"native", "Aardvark.dll"}, {"dotnet", "Aardvark.Managed.dll"}, {"native", "Beta.dll"}, {"dotnet", "Beta.Managed.dll"}});
+		CHECK(calls == std::vector<LoadCall>{{"native", "Early.dll"}, {"native", "High.dll"}, {"dotnet", "High.Managed.dll"}, {"native", "Aardvark.dll"}, {"dotnet", "Aardvark.Managed.dll"}, {"native", "Beta.dll"}, {"dotnet", "Beta.Managed.dll"}});
 	}
 
 
@@ -411,7 +406,6 @@ auto_load = false
 		sandbox.file("mods/mixed/mod.toml", R"(
 name = "Mixed"
 [runtime]
-load_phase = "global_init"
 entry = "Early.dll"
 managed_entry = "CommandSupervisor.UI.dll"
 )");

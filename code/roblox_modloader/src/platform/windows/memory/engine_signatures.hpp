@@ -9,6 +9,13 @@ namespace rml
 	{
 		// clang-format off
 		constexpr auto batch_and_hash = memory::make_batch<
+		    {
+		        "RBX_GLOBAL_INIT",
+		        "40 53 48 83 EC 50 C7 44 24 60 00 00 00 00 E8 ? ? ? ? E8 ? ? ? ? 85 C0 79 ? 48 8B 05 ? ? ? ? 3C 06 72 ? 48 C1 E8 08 3C 03 72 ?",
+		        [](const memory::handle ptr) {
+			        g_pointers->m_roblox_pointers.global_init = ptr.as<functions::global_init>();
+		        },
+		    },
 		    // Lua Functions
 		    {
 		        "LUA_LOAD",

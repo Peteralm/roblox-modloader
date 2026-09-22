@@ -11,6 +11,8 @@
 namespace RBX
 {
 	class TaskSchedulerJob;
+	class ICreator;
+	class Name;
 }
 
 namespace rml
@@ -33,5 +35,7 @@ namespace rml
 		static lua_Status luau_load(lua_State* L, const char* chunkname, const char* data, size_t size, int env);
 		static void* build_menu_bar_from_dom(void* out_menu_bar, void* dom, void* context);
 		static void qt_action_activate(void* self, int event);
+		static void global_init();
+		static const RBX::ICreator* creatable_get_creator(const RBX::Name* name);
 	};
 }

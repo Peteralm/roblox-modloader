@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <optional>
@@ -27,12 +28,6 @@ namespace rml::config
 		parse_error,
 		validation_error,
 		io_error
-	};
-
-	enum class ModLoadPhase : std::uint8_t
-	{
-		Normal,
-		GlobalInit
 	};
 
 	template<typename T>
@@ -71,6 +66,7 @@ namespace rml::config
 			bool debug_mode{false};
 			bool enable_hot_reload{false};
 			bool verbose_logging{false};
+			std::uint32_t init_gate_timeout_seconds{30};
 		} developer;
 	};
 
@@ -86,7 +82,6 @@ namespace rml::config
 			bool enabled{true};
 			bool auto_load{true};
 			std::int32_t priority{0};
-			ModLoadPhase load_phase{ModLoadPhase::Normal};
 			std::optional<std::filesystem::path> dependencies_path;
 		} runtime;
 

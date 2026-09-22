@@ -32,7 +32,6 @@ namespace rml
 			std::optional<std::filesystem::path> entry;
 			std::optional<std::filesystem::path> managed_entry;
 			bool has_static_identity{};
-			bool has_explicit_load_phase{};
 		};
 
 
@@ -200,7 +199,6 @@ namespace rml
 					return std::nullopt;
 				}
 
-				manifest.has_explicit_load_phase = static_cast<bool>((*runtime)["load_phase"]);
 				if (const auto entry_node = (*runtime)["entry"])
 				{
 					const auto entry = entry_node.value<std::string>();
@@ -223,12 +221,6 @@ namespace rml
 				}
 			}
 
-			if (manifest.runtime.load_phase == config::ModLoadPhase::GlobalInit
-			    && (!manifest.has_static_identity || !manifest.has_explicit_load_phase || !manifest.entry))
-			{
-				result.errors.push_back({path, "global_init requires name, runtime.load_phase, and runtime.entry"});
-				return std::nullopt;
-			}
 			return manifest;
 		}
 
@@ -278,7 +270,7 @@ namespace rml
 			return std::ranges::contains(kNativeModExtensions, extension);
 		}
 
-		[[nodiscard]] NativeSelection select_native_entry(const std::filesystem::path& root, const std::optional<std::filesystem::path>& entry, const config::ModLoadPhase load_phase, ModCatalogResult& result)
+		[[nodiscard]] NativeSelection select_native_entry(const std::filesystem::path& root, const std::optional<std::filesystem::path>& entry, ModCatalogResult& result)
 		{
 			const auto native_path = root / mod_kind_folder_name(ModKind::Native);
 			std::error_code error;
@@ -290,9 +282,9 @@ namespace rml
 			}
 			if (!has_native)
 			{
-				if (entry || load_phase == config::ModLoadPhase::GlobalInit)
+				if (entry)
 					result.errors.push_back({root / "mod.toml", "selected native directory is missing"});
-				return {.valid = !entry && load_phase != config::ModLoadPhase::GlobalInit};
+				return {.valid = !entry};
 			}
 
 			const auto native_root = canonical_descendant(native_path, root, result, "native directory");
@@ -480,7 +472,7 @@ namespace rml
 					manifest.runtime.priority = *policy->priority;
 			}
 
-			const auto native = select_native_entry(*root, manifest.entry, manifest.runtime.load_phase, result);
+			const auto native = select_native_entry(*root, manifest.entry, result);
 			if (!native.valid)
 				continue;
 			const auto dotnet = collect_dotnet_entries(*root, manifest.managed_entry, result);
@@ -494,8 +486,7 @@ namespace rml
 			    manifest.has_static_identity ? manifest.name : folder_id,
 			    manifest.runtime.priority,
 			    manifest.runtime.enabled,
-			    manifest.runtime.auto_load,
-			    manifest.runtime.load_phase});
+			    manifest.runtime.auto_load});
 		}
 		if (error)
 			result.errors.push_back({*mods_root, "cannot enumerate mods directory: " + error.message()});

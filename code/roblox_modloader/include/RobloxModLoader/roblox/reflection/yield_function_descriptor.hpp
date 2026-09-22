@@ -34,15 +34,11 @@ namespace RBX::Reflection
 			return signature;
 		}
 
-	protected:
-		std::byte pad[0x8];
 		SignatureDescriptor signature;
-
-	private:
-		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_SIZE(YieldFunctionDescriptor, 0x78);
-			RML_ASSERT_LAYOUT_OFFSET(YieldFunctionDescriptor, pad, 0x40);
-			RML_ASSERT_LAYOUT_OFFSET(YieldFunctionDescriptor, signature, 0x48);
-		RML_LAYOUT_GUARD_END()
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_SIZE(YieldFunctionDescriptor, 0x78);
+	RML_ASSERT_OFFSET(YieldFunctionDescriptor, signature, 0x48);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 }

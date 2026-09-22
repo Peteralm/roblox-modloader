@@ -45,7 +45,7 @@ option(ROBLOX_MODLOADER_BUILD_MANAGED_PROJECTS "Build C# projects as part of the
 option(ROBLOX_MODLOADER_USE_CMAKE_CSHARP "Use CMake's native C# project integration on Visual Studio generators" ${RML_DEFAULT_USE_CMAKE_CSHARP})
 option(ROBLOX_MODLOADER_INSTALL "Install RobloxModLoader" OFF)
 option(RML_ENABLE_LUAU "Compile the Luau scripting subsystem" ON)
-option(ROBLOX_MODLOADER_BUILD_CORE_TESTS "Build roblox_modloader core unit tests" OFF)
+option(RML_BUILD_TESTS "Build the loader unit tests" ON)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
@@ -87,7 +87,7 @@ if (ROBLOX_MODLOADER_BUILD_DUMPER)
     endif ()
 endif ()
 
-if (ROBLOX_MODLOADER_BUILD_CORE_TESTS AND NOT TARGET doctest::doctest)
+if (RML_BUILD_TESTS)
     include(cmake/doctest.cmake)
     enable_testing()
 endif ()

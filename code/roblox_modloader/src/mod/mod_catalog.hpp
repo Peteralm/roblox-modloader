@@ -20,7 +20,6 @@ namespace rml
 		std::int32_t priority;
 		bool enabled;
 		bool auto_load;
-		config::ModLoadPhase load_phase;
 	};
 
 	struct ModCatalogError

@@ -1,8 +1,6 @@
 
 #pragma once
-#include "early_mod_registry.hpp"
 #include "mod/imod_loader.hpp"
-#include "mod/mod_kind.hpp"
 #include "mod_registry.hpp"
 
 #include <RobloxModLoader/internal/common.hpp>
@@ -17,9 +15,8 @@ namespace rml::native
 	class NativeModLoader final : public IModLoader
 	{
 	public:
-		explicit NativeModLoader(events::EventManager& event_manager, EarlyModRegistry& early_registry = EarlyModRegistry::instance()) :
-		    m_event_manager(event_manager),
-		    m_early_registry(early_registry)
+		explicit NativeModLoader(events::EventManager& event_manager) :
+		    m_event_manager(event_manager)
 		{
 		}
 		~NativeModLoader() override;
@@ -29,18 +26,19 @@ namespace rml::native
 		std::expected<void, std::string> reload(const std::filesystem::path& path) override;
 		[[nodiscard]] std::vector<std::filesystem::path> extensions() const override
 		{
-			std::vector<std::filesystem::path> result;
-			result.reserve(kNativeModExtensions.size());
-			for (const auto extension : kNativeModExtensions)
-				result.emplace_back(extension);
-			return result;
+#if defined(RML_WINDOWS)
+			return {".dll"};
+#elif defined(RML_MACOS)
+			return {".dylib", ".so"};
+#else
+			return {".so"};
+#endif
 		}
 		void unload_all() override;
 
 	private:
 		ModRegistry m_registry;
 		events::EventManager& m_event_manager;
-		EarlyModRegistry& m_early_registry;
 	};
 
 } // namespace rml::native

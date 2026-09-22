@@ -1,21 +1,46 @@
 #pragma once
 
 #include "RobloxModLoader/internal/engine_abi.hpp"
+#include "RobloxModLoader/roblox/reflection/array_view.hpp"
+#include "RobloxModLoader/roblox/reflection/creatable.hpp"
 #include "RobloxModLoader/roblox/util/standard_out.hpp"
 #include "lua.h"
 #include "lualib.h"
 
 #include <cstdarg>
 #include <cstdint>
+#include <vector>
 
 namespace RBX::Security
 {
 	enum class Identity : std::uint64_t;
 }
 
+namespace RBX::Signals
+{
+	struct Signal;
+}
+
+namespace RBX
+{
+	class Name;
+}
+
+namespace RBX::Reflection
+{
+	class ClassDescriptor;
+	class PropertyDescriptor;
+	class EventDescriptor;
+	class FunctionDescriptor;
+	class YieldFunctionDescriptor;
+	class CallbackDescriptor;
+}
+
 namespace functions
 {
 	using get_string_atom = uintptr_t (*)(const char* name);
+	using name_declare = const RBX::Name* (*)(const char* name);
+	using slots_holder_release = void (*)(RBX::Signals::Signal* holder);
 	using descriptor_lookup = uintptr_t* (*)(uintptr_t class_descriptor_hash, uintptr_t* member_descriptor_hash);
 	using get_scheduler = uintptr_t (*)();
 	using print = void(RML_ENGINE_CALL*)(RBX::MessageType level, const char* fmt, ...);
@@ -38,6 +63,15 @@ namespace functions
 	using signal_disconnect = void(RML_ENGINE_CALL*)(void* slot);
 	using signal_slot_free = void(RML_ENGINE_CALL*)(void* slot);
 	using signal_mutex_get = void*(RML_ENGINE_CALL*)();
+	using global_init = void (*)();
+	using class_descriptor_ctor = void (*)(void* self, void* base, const char* name, std::uint32_t instance_id, std::uint64_t stable_id, bool a6, bool a7, const void* attributes, std::uint32_t protection, const std::uint32_t* memory_category, RBX::ArrayView<const RBX::Reflection::PropertyDescriptor*> properties, RBX::ArrayView<const RBX::Reflection::EventDescriptor*> events, RBX::ArrayView<const RBX::Reflection::FunctionDescriptor*> functions, RBX::ArrayView<const RBX::Reflection::YieldFunctionDescriptor*> yield_functions, RBX::ArrayView<const RBX::Reflection::CallbackDescriptor*> callbacks);
+	using class_descriptor_all_classes = std::vector<RBX::Reflection::ClassDescriptor*>* (*)();
+	using creatable_get_creator = const RBX::ICreator* (*)(const RBX::Name* name);
+	using instance_ctor = void (*)(void* self, const RBX::ForceConstructionInCreatable* force, const char* name);
+	using create_instance_impl = void* (*)(std::uint32_t stable_id, std::size_t size, std::size_t align, std::uint32_t memory_category, void* (*construct)(void* memory, const void* args), const void* args);
+	using property_descriptor_ctor = void (*)(void* self, void* class_descriptor, const void* type, const char* name, const char* category, const void* attributes, std::uint32_t protection_get, std::uint32_t protection_set, bool a9);
+	using function_descriptor_ctor = void (*)(void* self, void* class_descriptor, const char* name, std::uint32_t protection, std::uint64_t attributes_lo, std::uint64_t attributes_hi);
+	using event_descriptor_ctor = void (*)(void* self, void* class_descriptor, const char* name, std::uint32_t protection, const void* attributes);
 
 	using lua_gettop = int(RML_ENGINE_CALL*)(lua_State* L);
 	using lua_settop = void(RML_ENGINE_CALL*)(lua_State* L, int idx);

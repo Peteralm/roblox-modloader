@@ -52,7 +52,7 @@ namespace rml
 
 		[[nodiscard]] std::expected<void, ModManagerError> load_directory(const std::filesystem::path& directory) const;
 		void load_catalog(const ModCatalogResult& catalog) const;
-		[[nodiscard]] static std::vector<std::string> load_catalog(const ModCatalogResult& catalog, IModLoader* native_loader, IModLoader* dotnet_loader, config::ModLoadPhase phase = config::ModLoadPhase::Normal);
+		[[nodiscard]] static std::vector<std::string> load_catalog(const ModCatalogResult& catalog, IModLoader* native_loader, IModLoader* dotnet_loader);
 		[[nodiscard]] std::expected<void, std::string> load(const std::filesystem::path& path) const;
 		[[nodiscard]] std::expected<void, std::string> unload(const std::filesystem::path& path) const;
 		[[nodiscard]] std::expected<void, std::string> reload(const std::filesystem::path& path) const;
@@ -66,7 +66,7 @@ namespace rml
 		std::unordered_map<ModKind, std::unique_ptr<IModLoader>> m_loaders;
 	};
 
-	inline std::vector<std::string> ModManager::load_catalog(const ModCatalogResult& catalog, IModLoader* native_loader, IModLoader* dotnet_loader, const config::ModLoadPhase phase)
+	inline std::vector<std::string> ModManager::load_catalog(const ModCatalogResult& catalog, IModLoader* native_loader, IModLoader* dotnet_loader)
 	{
 		std::vector<std::string> errors;
 		const auto load_entry = [&errors](IModLoader* loader, const std::filesystem::path& path) {
@@ -81,7 +81,7 @@ namespace rml
 
 		for (const auto& mod : catalog.mods)
 		{
-			if (!mod.enabled || !mod.auto_load || mod.load_phase != phase)
+			if (!mod.enabled || !mod.auto_load)
 				continue;
 			if (mod.native_entry)
 				load_entry(native_loader, *mod.native_entry);

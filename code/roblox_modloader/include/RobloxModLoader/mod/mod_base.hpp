@@ -9,6 +9,11 @@
 #include <string>
 #include <utility>
 
+namespace rml
+{
+	class InitContext;
+}
+
 class RML_EXPORT ModBase
 {
 public:
@@ -28,6 +33,10 @@ public:
 	virtual void on_unload() = 0;
 
 	virtual void on_script_manager_load()
+	{
+	}
+
+	virtual void on_init(rml::InitContext&)
 	{
 	}
 

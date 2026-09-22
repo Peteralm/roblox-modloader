@@ -7,7 +7,7 @@
 #include "event_descriptor.hpp"
 #include "function_descriptor.hpp"
 #include "member.hpp"
-#include "pointers.hpp"
+#include "RobloxModLoader/internal/roblox_pointers.hpp"
 #include "property_descriptor.hpp"
 #include "yield_function_descriptor.hpp"
 
@@ -61,7 +61,7 @@ namespace RBX::Reflection
 			PLAYER_REPLICATE = 2,
 		};
 
-		typedef Vector<ClassDescriptor*> ClassDescriptors;
+		typedef std::vector<ClassDescriptor*> ClassDescriptors;
 
 		using PropertyDescriptors = MemberDescriptorContainer<PropertyDescriptor>::DescriptorView;
 		using FunctionDescriptors = MemberDescriptorContainer<FunctionDescriptor>::DescriptorView;
@@ -69,35 +69,63 @@ namespace RBX::Reflection
 		using EventDescriptors = MemberDescriptorContainer<EventDescriptor>::DescriptorView;
 		using CallbackDescriptors = MemberDescriptorContainer<CallbackDescriptor>::DescriptorView;
 
-	private:
-		char padding[24]; // some boolean?
-	public:
-		const Security::Permissions security;
-
-		ClassDescriptor* const base;
+		public:
+		std::uint64_t security;
+		std::byte reserved_after_security[16];
+#if defined(RML_WINDOWS)
+		std::uint32_t functionality;
+		std::uint32_t reserved_after_functionality;
+		const std::uint32_t* memory_category;
+		ClassDescriptor* base;
+#else
+		const std::uint32_t* memory_category;
+		ClassDescriptor* base;
+		std::uint32_t reserved_before_functionality;
+		std::uint16_t functionality;
+		std::uint16_t reserved_after_functionality;
+#endif
 		ClassDescriptors derived_classes;
-		const unsigned replicate_type : 2;
-		const unsigned can_xml_write : 1;
-		const unsigned is_scriptable : 1;
+		std::uint32_t member_table_count;
+		std::uint32_t reserved_1dc;
+		std::uint64_t reserved_1e0;
+		void* member_table;
+		std::uint64_t reserved_1f0;
+		void* arena;
+				std::byte reserved_tail[48];
+
+		unsigned replicate_type() const
+		{
+			return (functionality >> 1) & 3;
+		}
+
+		unsigned can_xml_write() const
+		{
+			return (functionality >> 3) & 1;
+		}
+
+		unsigned is_scriptable() const
+		{
+			return (functionality >> 4) & 1;
+		}
 
 		const ClassDescriptor* get_base() const
 		{
 			return base;
 		}
 
-		ReplicationLevel get_replication_level() const
+				ReplicationLevel get_replication_level() const
 		{
-			return static_cast<ReplicationLevel>(replicate_type);
+			return static_cast<ReplicationLevel>(replicate_type());
 		}
 
 		bool is_script_creatable() const
 		{
-			return is_scriptable != 0;
+			return is_scriptable() != 0;
 		}
 
-		bool is_serializable() const
+				bool is_serializable() const
 		{
-			return can_xml_write != 0;
+			return can_xml_write() != 0;
 		}
 
 		ClassDescriptors::const_iterator derived_classes_begin() const
@@ -223,30 +251,20 @@ namespace RBX::Reflection
 		template<typename T>
 		T* find_descriptor(const char* name) const
 		{
-			if (!g_pointers || !g_pointers->m_roblox_pointers.get_string_atom
-			    || !g_pointers->m_roblox_pointers.descriptor_lookup
-			    || !g_pointers->m_roblox_pointers.member_table_offset)
+			const auto* pointers = get_roblox_pointers();
+			if (!pointers || !pointers->get_string_atom || !pointers->descriptor_lookup || !pointers->member_table_offset)
 			{
 				return nullptr;
 			}
 
-			auto atom = g_pointers->m_roblox_pointers.get_string_atom(name);
+			auto atom = pointers->get_string_atom(name);
 			if (!atom)
 			{
 				return nullptr;
 			}
 
-			const std::uint64_t member_table_offset = g_pointers->m_roblox_pointers.member_table_offset;
-			const auto desc = g_pointers->m_roblox_pointers.descriptor_lookup(reinterpret_cast<uint64_t>(this) + member_table_offset, &atom);
-			if (desc && *desc)
-			{
-				return reinterpret_cast<T*>(*desc);
-			}
-
-			LOG_WARN("[ClassDescriptor::find_descriptor] Failed to find descriptor '{}' in class '{}'",
-			    name,
-			    this->name.c_str());
-			return nullptr;
+			const auto desc = pointers->descriptor_lookup(reinterpret_cast<uint64_t>(this) + pointers->member_table_offset, &atom);
+			return desc && *desc ? reinterpret_cast<T*>(*desc) : nullptr;
 		}
 
 		PropertyDescriptor* find_property(const char* name) const
@@ -285,40 +303,75 @@ namespace RBX::Reflection
 		}
 
 		template<class T>
-		MemberDescriptorContainer<T>::Collection::const_iterator begin() const
+		MemberDescriptorContainer<T>::ConstIterator begin() const
 		{
 			return MemberDescriptorContainer<T>::descriptors_begin();
 		}
 
 		template<class T>
-		MemberDescriptorContainer<T>::Collection::const_iterator end() const
+		MemberDescriptorContainer<T>::ConstIterator end() const
 		{
 			return MemberDescriptorContainer<T>::descriptors_end();
 		}
 
 	private:
 		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_SIZE(ClassDescriptor, 0x1d8);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, padding, 0x190);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, security, 0x1a8);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, base, 0x1b0);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, derived_classes, 0x1b8);
+			RML_LAYOUT_DIAGNOSTIC_PUSH()
+#if defined(RML_WINDOWS)
+			RML_ASSERT_SIZE(ClassDescriptor, 0x2A8);
+			RML_ASSERT_OFFSET(ClassDescriptor, security, 0x208);
+			RML_ASSERT_OFFSET(ClassDescriptor, functionality, 0x220);
+			RML_ASSERT_OFFSET(ClassDescriptor, memory_category, 0x228);
+			RML_ASSERT_OFFSET(ClassDescriptor, base, 0x230);
+			RML_ASSERT_OFFSET(ClassDescriptor, derived_classes, 0x238);
+			RML_ASSERT_OFFSET(ClassDescriptor, member_table_count, 0x250);
+			RML_ASSERT_OFFSET(ClassDescriptor, member_table, 0x260);
+			RML_ASSERT_OFFSET(ClassDescriptor, arena, 0x270);
+#else
+			RML_ASSERT_SIZE(ClassDescriptor, 0x230);
+			RML_ASSERT_OFFSET(ClassDescriptor, security, 0x190);
+			RML_ASSERT_OFFSET(ClassDescriptor, memory_category, 0x1A8);
+			RML_ASSERT_OFFSET(ClassDescriptor, base, 0x1B0);
+			RML_ASSERT_OFFSET(ClassDescriptor, functionality, 0x1BC);
+			RML_ASSERT_OFFSET(ClassDescriptor, derived_classes, 0x1C0);
+			RML_ASSERT_OFFSET(ClassDescriptor, member_table_count, 0x1D8);
+			RML_ASSERT_OFFSET(ClassDescriptor, member_table, 0x1E8);
+			RML_ASSERT_OFFSET(ClassDescriptor, arena, 0x1F8);
+#endif
+			RML_LAYOUT_DIAGNOSTIC_POP()
 		RML_LAYOUT_GUARD_END()
 	};
 
-	class DescribedBase : public EventSource, public std::enable_shared_from_this<DescribedBase>
+	class DescribedBase : public EventSource
 	{
 	protected:
+		union
+		{
+			std::weak_ptr<DescribedBase> weak_this;
+		};
 		const ClassDescriptor* descriptor;
-		std::unique_ptr<std::string> xml_id;
+		union
+		{
+			std::unique_ptr<std::string> xml_id;
+		};
 
-	public:
 		DescribedBase()
 		{
 		}
 
-		virtual ~DescribedBase()
+	public:
+		~DescribedBase() override
 		{
+		}
+
+		std::shared_ptr<DescribedBase> shared_from_this()
+		{
+			return std::shared_ptr<DescribedBase>(weak_this);
+		}
+
+		std::shared_ptr<const DescribedBase> shared_from_this() const
+		{
+			return std::shared_ptr<const DescribedBase>(weak_this);
 		}
 
 		inline const ClassDescriptor& get_descriptor() const
@@ -416,10 +469,19 @@ namespace RBX::Reflection
 			}
 		}
 
-		virtual void* get_as_internal(InterfaceId interface_id) const = 0;
+		virtual void* get_as_internal(InterfaceId interface_id) const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual const RBX::Name& get_class_name() const = 0;
+		virtual const RBX::Name& get_class_name() const
+		{
+			rml::engine_virtual_unreachable();
+		}
 
-		virtual void on_created() = 0;
+		virtual void on_created()
+		{
+			rml::engine_virtual_unreachable();
+		}
 	};
 }

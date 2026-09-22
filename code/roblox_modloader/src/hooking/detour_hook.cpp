@@ -64,6 +64,9 @@ namespace rml
 
 	std::expected<void, rml::HookError> DetourHook::enable()
 	{
+		if (m_enabled)
+			return {};
+
 		if (!g_hook_engine)
 			return std::unexpected(HookError::from_status(m_name, 0, "hook engine unavailable"));
 

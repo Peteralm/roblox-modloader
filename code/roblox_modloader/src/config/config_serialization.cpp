@@ -167,6 +167,7 @@ namespace rml::config::serialization {
         table.insert_or_assign("debug_mode", developer.debug_mode);
         table.insert_or_assign("enable_hot_reload", developer.enable_hot_reload);
         table.insert_or_assign("verbose_logging", developer.verbose_logging);
+        table.insert_or_assign("init_gate_timeout_seconds", static_cast<std::int64_t>(developer.init_gate_timeout_seconds));
 
         return table;
     }
@@ -185,6 +186,12 @@ namespace rml::config::serialization {
 
             if (const auto verbose_node = table["verbose_logging"]) {
                 developer.verbose_logging = verbose_node.value_or(developer.verbose_logging);
+            }
+
+            if (const auto timeout_node = table["init_gate_timeout_seconds"]) {
+                if (const auto timeout = timeout_node.value<std::int64_t>()) {
+                    developer.init_gate_timeout_seconds = static_cast<std::uint32_t>(*timeout);
+                }
             }
 
             return developer;
@@ -208,7 +215,6 @@ namespace rml::config::serialization {
         runtime_table.insert_or_assign("enabled", mod_config.runtime.enabled);
         runtime_table.insert_or_assign("auto_load", mod_config.runtime.auto_load);
         runtime_table.insert_or_assign("priority", static_cast<std::int64_t>(mod_config.runtime.priority));
-		runtime_table.insert_or_assign("load_phase", mod_config.runtime.load_phase == ModLoadPhase::GlobalInit ? "global_init" : "normal");
 
 		if (mod_config.runtime.dependencies_path) {
             runtime_table.insert_or_assign("dependencies_path", mod_config.runtime.dependencies_path->string());
@@ -323,29 +329,6 @@ namespace rml::config::serialization {
                         mod_config.runtime.priority = static_cast<std::int32_t>(*priority);
                     }
                 }
-
-				if (const auto load_phase_node = runtime_table["load_phase"])
-				{
-					if (const auto load_phase_str = load_phase_node.value<std::string>())
-					{
-						if (*load_phase_str == "normal")
-						{
-							mod_config.runtime.load_phase = ModLoadPhase::Normal;
-						}
-						else if (*load_phase_str == "global_init")
-						{
-							mod_config.runtime.load_phase = ModLoadPhase::GlobalInit;
-						}
-						else
-						{
-							return std::unexpected(ConfigError::parse_error);
-						}
-					}
-					else
-					{
-						return std::unexpected(ConfigError::parse_error);
-					}
-				}
 
 				if (const auto deps_node = runtime_table["dependencies_path"]) {
                     if (const auto deps_str = deps_node.value<std::string>()) {
