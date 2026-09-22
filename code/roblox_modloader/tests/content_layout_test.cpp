@@ -7,8 +7,14 @@
 TEST_CASE("content mirrors keep the measured layout")
 {
 	static_assert(sizeof(RBX::ContentId) == 8 + sizeof(std::string));
+#if defined(_WIN32)
+	// MSVC's std::mutex is 80 bytes where libc++'s is 64, and the pair after it moves with it.
+	static_assert(sizeof(RBX::ContentProviderTemporaryIdFactory) == 160);
+	static_assert(offsetof(RBX::ContentProviderTemporaryIdFactory, buffers) == 96);
+#else
 	static_assert(sizeof(RBX::ContentProviderTemporaryIdFactory) == 112);
 	static_assert(offsetof(RBX::ContentProviderTemporaryIdFactory, buffers) == 72);
+#endif
 	static_assert(offsetof(RBX::SubsystemHandle<int>, instance) == 24);
 	CHECK(static_cast<int>(RBX::ContentIdType::Temporary) == 4);
 	CHECK(static_cast<int>(RBX::ContentIdType::AssetId) == 5);

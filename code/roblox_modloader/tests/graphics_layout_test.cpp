@@ -62,8 +62,14 @@ TEST_CASE("scene mirrors keep the measured layout")
 TEST_CASE("adorn interface keeps the dumped slot order")
 {
 	using namespace RBX;
+#if defined(_WIN32)
+	// Everything that holds a std::string or a std::mutex grows on the MSVC standard library.
+	static_assert(sizeof(Adorn) == 168);
+	static_assert(sizeof(Graphics::AdornRender) == 2776);
+#else
 	static_assert(sizeof(Adorn) == 144);
 	static_assert(sizeof(Graphics::AdornRender) == 2744);
+#endif
 	static_assert(sizeof(Graphics::GeometryBatch) == 40);
 	static_assert(Adorn::Material_Count == 13);
 	static_assert(Adorn::Pass_Count == 7);
@@ -102,7 +108,11 @@ TEST_CASE("render queue, technique and texture ref mirrors keep the measured lay
 	static_assert(offsetof(Technique, program) == 40);
 	static_assert(offsetof(Technique, textures) == 64);
 	static_assert(sizeof(Material) == 40);
+#if defined(_WIN32)
+	static_assert(sizeof(ShaderProgram) == 120);
+#else
 	static_assert(sizeof(ShaderProgram) == 112);
+#endif
 	static_assert(sizeof(ImageInfo) == 88);
 	static_assert(sizeof(TextureRefData) == 152);
 	static_assert(offsetof(TextureRefData, status) == 144);
