@@ -180,13 +180,15 @@ internal sealed class ScriptEditorSession : IDisposable
                 break;
 
             // The editor missed a text report while it still owed the engine edits; it is asking
-            // for the current document now that it owes nothing.
+            // for the current document now that it owes nothing. The answer echoes how many edits
+            // the editor had sent when it asked, so it can drop an answer that crossed newer typing.
             case "editor.resync":
+                var sent = message?["sent"]?.GetValue<int>();
                 _agent.TextAsync(DocumentId).ContinueWith(task =>
                 {
                     if (task.IsFaulted || task.Result is not { } current) return;
 
-                    _gui.Post(() => PushTextToEditor(current, true));
+                    _gui.Post(() => PushTextToEditor(current, true, sent));
                 }, TaskContinuationOptions.ExecuteSynchronously);
 
                 break;
@@ -211,7 +213,7 @@ internal sealed class ScriptEditorSession : IDisposable
         _webView.PostMessage(envelope);
     }
 
-    private void PushTextToEditor(string text, bool force = false)
+    private void PushTextToEditor(string text, bool force = false, int? sent = null)
     {
         if (!force && text == _lastSyncedText) return;
 
@@ -224,6 +226,7 @@ internal sealed class ScriptEditorSession : IDisposable
             ["uri"] = _uri,
             ["remote"] = true
         };
+        if (sent is { } count) envelope["sent"] = count;
         _webView.PostMessage(envelope.ToJsonString());
     }
 }

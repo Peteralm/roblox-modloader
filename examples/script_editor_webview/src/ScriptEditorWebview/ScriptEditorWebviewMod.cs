@@ -220,6 +220,14 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
             if (_sessions.TryGetValue(applied.Id, out var acknowledged))
                 acknowledged.OnEditsApplied(applied.Count);
 
+        // Only the newest text report per document may reach the editor. An older one in the same
+        // payload predates writes the acknowledgements above already confirmed, so the editor would
+        // take it as current and roll the buffer back for a frame.
+        var newestText = new Dictionary<int, AgentEvent>();
+        foreach (var report in payload.Events)
+            if (report is { Kind: "text", Stale: false, Text: not null })
+                newestText[report.Id] = report;
+
         foreach (var report in payload.Events)
             switch (report.Kind)
             {
@@ -232,9 +240,9 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
                     break;
 
                 case "text":
-                    if (!report.Stale && report.Text is { } text &&
+                    if (newestText.TryGetValue(report.Id, out var newest) && ReferenceEquals(newest, report) &&
                         _sessions.TryGetValue(report.Id, out var textTarget))
-                        textTarget.OnEngineText(text);
+                        textTarget.OnEngineText(report.Text!);
 
                     break;
 

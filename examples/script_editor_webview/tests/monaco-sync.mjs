@@ -190,12 +190,23 @@ async function run() {
 	const body = "local total = 0\nfor index = 1, 10 do\n\ttotal += index * index\nend\nprint(total)\n";
 	const typed = body.repeat(Math.max(1, Math.ceil(charCount / body.length)));
 
-	await page.evaluate(`(() => {
+	// The scratch document's first text arrives as a report of its own; typing before it lands would
+	// count it as a rewrite below.
+	await waitFor("the scratch document's text", () =>
+		page.evaluate("window.__rmlModelText().startsWith('-- rml monaco self test')"), 30_000);
+	const remoteBefore = await page.evaluate("window.__rmlRemoteChanges()");
+
+	// One key every 40 ms, like a fast typist: acknowledgements and text reports then land between
+	// keystrokes, which is where a stale report used to overwrite the buffer and move the cursor.
+	await page.evaluate(`(async () => {
 		const editor = monaco.editor.getEditors()[0];
 		editor.focus();
 		const model = editor.getModel();
 		editor.setPosition({ lineNumber: model.getLineCount(), column: 1 });
-		for (const character of ${JSON.stringify(typed)}) editor.trigger('kb', 'type', { text: character });
+		for (const character of ${JSON.stringify(typed)}) {
+			editor.trigger('kb', 'type', { text: character });
+			await new Promise((resolve) => setTimeout(resolve, 40));
+		}
 		return true;
 	})()`);
 
@@ -218,6 +229,13 @@ async function run() {
 		throw new Error(`the engine and the editor disagree at character ${at}: ` +
 			`editor has ${JSON.stringify(editorText.slice(at, at + 40))}, ` +
 			`engine has ${JSON.stringify(engineText.slice(at, at + 40))}`);
+	}
+
+	// The engine only echoed our own typing, so no report should have rewritten the buffer. One that
+	// did is a stale copy winning a race, and it drags the user's cursor with it.
+	const remoteChanges = await page.evaluate("window.__rmlRemoteChanges()") - remoteBefore;
+	if (remoteChanges !== 0) {
+		throw new Error(`the engine rewrote the editor ${remoteChanges} time(s) while it only echoed our own typing`);
 	}
 
 	// The other half of the mod: luau-lsp answering with types from the sourcemap the agent built.

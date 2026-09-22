@@ -57,15 +57,46 @@
       // once the engine has caught up.
       let missedRemoteText = false;
 
-      function applyRemoteText(text) {
+      // Edits sent to the engine since the page loaded. A resync answer carries the count it was
+      // asked at: if the user typed after asking, the answer predates those keystrokes even when the
+      // engine has already confirmed them, and applying it would roll the buffer back.
+      let editsSent = 0;
+
+      // Remote reports that actually changed the buffer, for tests/monaco-sync.mjs to count.
+      let remoteChanges = 0;
+
+      function requestResync() {
+        if (unacknowledgedEdits > 0 || !missedRemoteText) return;
+        missedRemoteText = false;
+        RMLHost.send({ type: 'editor.resync', sent: editsSent });
+      }
+
+      function applyRemoteText(text, sent) {
         if (typeof text !== 'string') return;
-        if (unacknowledgedEdits > 0) { missedRemoteText = true; return; }
-        if (model.getValue() === text) return;
+        if (unacknowledgedEdits > 0 || (typeof sent === 'number' && sent !== editsSent)) {
+          missedRemoteText = true;
+          requestResync();
+          return;
+        }
+
+        const current = model.getValue();
+        if (current === text) return;
+
+        // Replace only the span that differs. Replacing the whole document dragged the cursor to
+        // the end of the file on every report the engine sent back mid-typing.
+        const shortest = Math.min(current.length, text.length);
+        let head = 0;
+        while (head < shortest && current.charCodeAt(head) === text.charCodeAt(head)) head++;
+        let tail = 0;
+        while (tail < shortest - head &&
+          current.charCodeAt(current.length - 1 - tail) === text.charCodeAt(text.length - 1 - tail)) tail++;
+
+        const range = monaco.Range.fromPositions(model.getPositionAt(head), model.getPositionAt(current.length - tail));
         applyingRemoteText = true;
         try {
-          // executeEdits keeps the cursor and the undo stack; setValue would reset both on every
-          // change the engine reports.
-          editor.executeEdits('rml-engine', [{ range: model.getFullModelRange(), text, forceMoveMarkers: true }]);
+          // executeEdits keeps the cursor and the undo stack; setValue would reset both.
+          editor.executeEdits('rml-engine', [{ range, text: text.slice(head, text.length - tail) }]);
+          remoteChanges++;
         } finally {
           applyingRemoteText = false;
         }
@@ -84,6 +115,7 @@
         });
         if (edits.length > 0) {
           unacknowledgedEdits += edits.length;
+          editsSent += edits.length;
           RMLHost.send({ type: 'editor.edits', edits: edits });
         }
       });
@@ -95,13 +127,10 @@
       RMLHost.onMessage(function (msg) {
         if (!msg || !msg.type) return;
         if (msg.type === 'editor.setText') {
-          applyRemoteText(msg.text);
+          applyRemoteText(msg.text, msg.sent);
         } else if (msg.type === 'editor.applied') {
           if (unacknowledgedEdits > 0) unacknowledgedEdits--;
-          if (unacknowledgedEdits === 0 && missedRemoteText) {
-            missedRemoteText = false;
-            RMLHost.send({ type: 'editor.resync' });
-          }
+          requestResync();
         } else if (msg.type === 'editor.engineText') {
           // Answer to editor.verify: what the engine holds, for tests/monaco-sync.mjs to compare.
           window.__rmlEngineText = msg.text;
@@ -115,6 +144,7 @@
       window.__rmlVerify = function () { window.__rmlEngineText = null; RMLHost.send({ type: 'editor.verify' }); };
       window.__rmlModelText = function () { return model.getValue(); };
       window.__rmlPending = function () { return unacknowledgedEdits; };
+      window.__rmlRemoteChanges = function () { return remoteChanges; };
 
       RMLHost.send({ type: 'editor.ready' });
     });
