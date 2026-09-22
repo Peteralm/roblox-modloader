@@ -65,14 +65,30 @@ async function waitFor(what, predicate, timeoutMs) {
 	throw new Error(`timed out waiting for ${what} after ${timeoutMs / 1000}s`);
 }
 
-async function findEditorTarget() {
+// Studio can hold more than one overlay page at a time — the scratch document and whatever the
+// session attached to earlier — and only the one Monaco finished loading in answers __rmlVerify.
+// Picking the first match instead of the ready one fails a healthy build.
+async function findReadyEditorPage() {
+	let targets;
 	try {
 		const response = await fetch(`http://127.0.0.1:${port}/json/list`);
-		const targets = await response.json();
-		return targets.find((target) => target.url.includes("rml.scripteditor"));
+		targets = await response.json();
 	} catch {
 		return undefined;
 	}
+
+	for (const target of targets.filter((candidate) => candidate.url.includes("rml.scripteditor"))) {
+		const page = await connect(target.webSocketDebuggerUrl);
+		try {
+			if (await page.evaluate("typeof window.__rmlVerify === 'function'")) return page;
+		} catch {
+			// A page that is still navigating rejects the evaluate; try the next one.
+		}
+
+		page.close();
+	}
+
+	return undefined;
 }
 
 /** Minimal CDP client: one socket, Runtime.evaluate, nothing else. */
@@ -168,10 +184,8 @@ async function run() {
 	await waitFor("the overlay to attach", () => runLog().includes("attached editor overlay"), 120_000);
 	console.log("overlay attached");
 
-	const target = await waitFor("the Monaco page", findEditorTarget, 60_000);
-	const page = await connect(target.webSocketDebuggerUrl);
-
-	await waitFor("Monaco to load", () => page.evaluate("typeof window.__rmlVerify === 'function'"), 60_000);
+	const page = await waitFor("Monaco to load in an overlay page", findReadyEditorPage, 120_000);
+	console.log("monaco ready");
 
 	const body = "local total = 0\nfor index = 1, 10 do\n\ttotal += index * index\nend\nprint(total)\n";
 	const typed = body.repeat(Math.max(1, Math.ceil(charCount / body.length)));
