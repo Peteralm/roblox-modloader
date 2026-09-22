@@ -129,7 +129,7 @@ namespace RBX::Reflection
 	protected:
 		char _descriptor_pre_pad[0x18];
 		Collection descriptors;
-		char _descriptor_post_pad[0x30];
+		char _descriptor_post_pad[0x18];
 
 	public:
 		const Collection& get_descriptors() const
@@ -186,7 +186,9 @@ namespace RBX::Reflection
 		}
 	};
 
-	RML_ASSERT_LAYOUT_SIZE(MemberDescriptorContainer<ClassDescriptor>, 0x60);
+	// Studio 0.739.0.7390687: the member collections of ClassDescriptor sit 0x48 apart
+	// (properties +0x40, events +0x88, functions +0xd0, yield functions +0x118).
+	RML_ASSERT_LAYOUT_SIZE(MemberDescriptorContainer<ClassDescriptor>, 0x48);
 
 	class MemberDescriptor : public Descriptor
 	{

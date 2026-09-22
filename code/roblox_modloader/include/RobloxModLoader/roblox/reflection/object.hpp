@@ -298,11 +298,11 @@ namespace RBX::Reflection
 
 	private:
 		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_SIZE(ClassDescriptor, 0x250);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, padding, 0x208);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, security, 0x220);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, base, 0x228);
-			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, derived_classes, 0x230);
+			RML_ASSERT_LAYOUT_SIZE(ClassDescriptor, 0x1d8);
+			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, padding, 0x190);
+			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, security, 0x1a8);
+			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, base, 0x1b0);
+			RML_ASSERT_LAYOUT_OFFSET(ClassDescriptor, derived_classes, 0x1b8);
 		RML_LAYOUT_GUARD_END()
 	};
 
