@@ -321,6 +321,30 @@ priority = 10
 		CHECK(catalog.mods[2].folder_id == "zeta");
 	}
 
+	TEST_CASE("mod catalog keeps one folder per declared identity")
+	{
+		CatalogSandbox sandbox;
+		sandbox.file("mods/editor/dotnet/Editor.dll");
+		sandbox.file("mods/editor/mod.toml", R"(
+name = "Script Editor Webview"
+[runtime]
+priority = 500
+)");
+		sandbox.file("mods/editor.bak/dotnet/Editor.dll");
+		sandbox.file("mods/editor.bak/mod.toml", R"(
+name = "Script Editor Webview"
+[runtime]
+priority = 500
+)");
+
+		const auto catalog = discover_mods(sandbox.root());
+
+		REQUIRE(catalog.mods.size() == 1);
+		CHECK(catalog.mods.front().folder_id == "editor");
+		REQUIRE(catalog.errors.size() == 1);
+		CHECK(catalog.errors.front().message.contains("already claims the identity"));
+	}
+
 	TEST_CASE("mod catalog manager loads exact ordered entries and defers gated roots")
 	{
 		CatalogSandbox sandbox;

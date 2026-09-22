@@ -505,6 +505,26 @@ namespace rml
 				return lhs.priority > rhs.priority;
 			return lhs.root.generic_string() < rhs.root.generic_string();
 		});
+
+		// Two folders declaring the same identity are the same mod twice -- a backup copy left in
+		// mods/ is the usual way it happens -- and loading both puts two instances on the same
+		// windows, hooks and engine state. Sorted order decides who keeps the name; the other is
+		// refused by path, so the log says which folder to move out.
+		std::vector<ModDefinition> unique_mods;
+		unique_mods.reserve(result.mods.size());
+		std::vector<std::string_view> claimed;
+		claimed.reserve(result.mods.size());
+		for (auto& mod : result.mods)
+		{
+			if (std::ranges::find(claimed, std::string_view{mod.name}) != claimed.end())
+			{
+				result.errors.push_back({mod.root, "another mod folder already claims the identity '" + mod.name + "'; move this one out of mods/"});
+				continue;
+			}
+			unique_mods.push_back(std::move(mod));
+			claimed.emplace_back(unique_mods.back().name);
+		}
+		result.mods = std::move(unique_mods);
 		return result;
 	}
 } // namespace rml
