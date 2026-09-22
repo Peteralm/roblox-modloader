@@ -3,8 +3,28 @@
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/memory/pattern.hpp"
 
+#include <cstring>
+
 namespace rml::memory
 {
+	namespace
+	{
+		// lea r64, [rip + disp32] -> REX.W + 8D /r with mod = 00 and r/m = 101.
+		constexpr std::uint8_t rex_w = 0x48;
+		constexpr std::uint8_t rex_wr = 0x4C;
+		constexpr std::uint8_t lea_opcode = 0x8D;
+		constexpr std::uint8_t modrm_mask = 0xC7;
+		constexpr std::uint8_t modrm_rip_relative = 0x05;
+		constexpr std::size_t lea_length = 7;
+		constexpr std::size_t lea_displacement = 3;
+
+		// adrp xN, <page> -> 1xx1 0000 with the immediate spread across the instruction.
+		constexpr std::uint32_t adrp_mask = 0x9F000000;
+		constexpr std::uint32_t adrp_value = 0x90000000;
+		constexpr std::size_t instruction_length = 4;
+		constexpr std::size_t adrp_pair_length = 8;
+	}
+
 	range::range(handle base, std::size_t size) :
 	    m_base(base),
 	    m_size(size)
@@ -94,5 +114,111 @@ namespace rml::memory
 		}
 
 		return std::nullopt;
+	}
+
+	std::vector<handle> range::scan_strings(const std::string_view text, const std::size_t limit) const
+	{
+		std::vector<handle> results;
+
+		if (text.empty())
+			return results;
+
+		// The terminator is part of the needle so that "[Internal]" never matches "[Internal]Foo".
+		const std::size_t length = text.size() + 1;
+		if (m_size < length)
+			return results;
+
+		const auto* const bytes = m_base.as<const char*>();
+		const std::size_t scan_end = m_size - length;
+
+		for (std::size_t offset = 0; offset <= scan_end; ++offset)
+		{
+			if (bytes[offset] != text.front())
+				continue;
+
+			if (std::memcmp(bytes + offset, text.data(), text.size()) != 0)
+				continue;
+
+			if (bytes[offset + text.size()] != '\0')
+				continue;
+
+			results.push_back(m_base.add(offset));
+
+			if (limit != 0 && results.size() >= limit)
+				break;
+
+			offset += text.size();
+		}
+
+		return results;
+	}
+
+	std::vector<handle> range::scan_references(const handle target, const std::size_t limit) const
+	{
+#if defined(__x86_64__) || defined(_M_X64)
+		std::vector<handle> results;
+
+		if (m_size < lea_length)
+			return results;
+
+		const auto* const bytes = m_base.as<const std::uint8_t*>();
+		const auto wanted = target.as<std::uintptr_t>();
+		const std::size_t scan_end = m_size - lea_length;
+
+		for (std::size_t offset = 0; offset <= scan_end; ++offset)
+		{
+			if (bytes[offset] != rex_w && bytes[offset] != rex_wr)
+				continue;
+
+			if (bytes[offset + 1] != lea_opcode)
+				continue;
+
+			if ((bytes[offset + 2] & modrm_mask) != modrm_rip_relative)
+				continue;
+
+			const auto instruction = m_base.add(offset);
+			if (instruction.add(lea_displacement).rip().as<std::uintptr_t>() != wanted)
+				continue;
+
+			results.push_back(instruction);
+
+			if (limit != 0 && results.size() >= limit)
+				break;
+
+			offset += lea_length - 1;
+		}
+
+		return results;
+#elif defined(__aarch64__) || defined(_M_ARM64)
+		// adrp xN, page followed by the add/ldr that applies the page offset.
+		std::vector<handle> results;
+
+		if (m_size < adrp_pair_length)
+			return results;
+
+		const auto wanted = target.as<std::uintptr_t>();
+		const std::size_t scan_end = m_size - adrp_pair_length;
+
+		for (std::size_t offset = 0; offset <= scan_end; offset += instruction_length)
+		{
+			const auto instruction = m_base.add(offset);
+			if ((instruction.as<const std::uint32_t&>() & adrp_mask) != adrp_value)
+				continue;
+
+			if (instruction.adrp().as<std::uintptr_t>() != wanted)
+				continue;
+
+			results.push_back(instruction);
+
+			if (limit != 0 && results.size() >= limit)
+				break;
+		}
+
+		return results;
+#else
+		(void) target;
+		(void) limit;
+		return {};
+#endif
 	}
 }

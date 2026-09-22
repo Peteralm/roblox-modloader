@@ -118,6 +118,30 @@ A reserved class is visible to reflection, but `Instance.new` on it is not suppo
 Studio 0.739 a descriptor carries no creation function of its own, so a descriptor copied from an
 existing class cannot become buildable by editing its fields. Treat this API as class *metadata*
 registration until the engine's creation path is mapped.
+## Finding the target
+
+A byte signature pins the instructions the compiler happened to emit, so it dies on the update that
+adds a local variable somewhere nearby. A string literal comes from the source and survives that
+churn, which makes it the most durable anchor available. `rml::memory::range` — and therefore
+`rml::memory::module` — can search for one and for the code that loads it:
+
+```cpp
+const rml::memory::module studio{rml::platform::studio_image_name()};
+
+// Exactly one literal and exactly one instruction loading it, or the mod refuses to run.
+const auto markers = studio.scan_strings("[Internal]", 2);
+const auto references = studio.scan_references(markers.front(), 2);
+```
+
+`scan_references` decodes whatever the architecture uses to materialize an address:
+`lea r64, [rip + disp32]` on x86-64, `adrp` plus the `add`/`ldr` that follows it on arm64. From the
+reference, walk back to the call that precedes it (`call` on x86-64, `bl` on arm64) and check the
+callee looks like what you expect before using it; see
+[`examples/internal_developer`](../examples/internal_developer) for the whole chain on both.
+
+Ask for one more match than you need (`limit` of 2 when you expect 1). A second match means the
+anchor is ambiguous in this build, and acting on the first one would write to the wrong address.
+Pattern scanning through `make_batch` is still there for targets no string reaches.
 
 ## Notes
 
