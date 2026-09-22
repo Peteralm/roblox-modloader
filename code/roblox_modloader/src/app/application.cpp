@@ -45,8 +45,8 @@ namespace rml
 
 		m_subsystems.push_back(std::make_unique<ConfigSubsystem>());
 		m_subsystems.push_back(std::make_unique<LoggerSubsystem>());
-		m_subsystems.push_back(std::make_unique<PointersSubsystem>());
 		m_subsystems.push_back(std::make_unique<InitGateSubsystem>());
+		m_subsystems.push_back(std::make_unique<PointersSubsystem>());
 		m_subsystems.push_back(std::make_unique<CrashDumperSubsystem>());
 		m_subsystems.push_back(std::move(event_manager_subsystem));
 		m_subsystems.push_back(std::make_unique<QtIntegrationSubsystem>());
