@@ -9,13 +9,21 @@ internal sealed class DiscordPresenceService : IDisposable
     private const string LargeImageText = "Roblox Studio";
     private const string SmallImageText = "RobloxModLoader";
 
+    /// <summary>
+    /// How long the web fallback stays muted at startup. The desktop pipe reports success through
+    /// OnReady but never reports its absence, so only elapsed time can settle the question.
+    /// </summary>
+    private static readonly TimeSpan WebFallbackGrace = TimeSpan.FromSeconds(3);
+
     private readonly DiscordRpcClient _client;
     private readonly WebPresenceBridge _bridge = new();
     private readonly DateTime _sessionStart = DateTime.UtcNow;
+    private readonly Timer _webFallbackTimer;
     private readonly object _gate = new();
 
     private JsonObject? _activity;
     private bool _desktopConnected;
+    private bool _webFallbackReady;
 
     public DiscordPresenceService()
     {
@@ -24,6 +32,10 @@ internal sealed class DiscordPresenceService : IDisposable
         _client.OnClose += OnDesktopClosed;
         _client.OnError += (_, e) => DiscordRpc.Logger.Error($"Discord error: {e.Message}");
         _client.Initialize();
+
+        // OnLoad publishes an activity immediately; letting it reach the web before OnReady has had
+        // its chance would flash the same presence on both transports.
+        _webFallbackTimer = new Timer(ReleaseWebFallback, null, WebFallbackGrace, Timeout.InfiniteTimeSpan);
     }
 
     public void Dispose()
@@ -34,11 +46,16 @@ internal sealed class DiscordPresenceService : IDisposable
             _client.OnReady -= OnDesktopReady;
             _client.OnClose -= OnDesktopClosed;
 
+            _webFallbackTimer.Dispose();
+
             lock (_gate)
             {
                 _bridge.Publish(null);
-                _bridge.Dispose();
             }
+
+            // Outside the gate: the bridge blocks on its close handshake and on draining its tasks,
+            // and a presence update arriving meanwhile must not queue behind that.
+            _bridge.Dispose();
 
             if (_client.IsDisposed) return;
 
@@ -108,7 +125,27 @@ internal sealed class DiscordPresenceService : IDisposable
 
             if (_desktopConnected) return;
 
+            // Still inside the startup grace: the activity is remembered above and the timer
+            // publishes it once the desktop app has had its chance to claim the presence.
+            if (!_webFallbackReady) return;
+
             _bridge.Publish(activity);
+        }
+    }
+
+    /// <summary>Opens the web fallback once the desktop pipe has had time to connect.</summary>
+    private void ReleaseWebFallback(object? state)
+    {
+        lock (_gate)
+        {
+            if (_webFallbackReady) return;
+
+            _webFallbackReady = true;
+
+            if (_desktopConnected || _activity is null) return;
+
+            DiscordRpc.Logger.Info("Discord desktop did not connect; publishing the activity to Discord Web.");
+            _bridge.Publish(_activity);
         }
     }
 
@@ -131,6 +168,11 @@ internal sealed class DiscordPresenceService : IDisposable
             if (_desktopConnected == connected) return;
 
             _desktopConnected = connected;
+
+            // A transition is the desktop's own verdict, so the startup grace has nothing left to
+            // wait for and the grace timer becomes a no-op.
+            _webFallbackReady = true;
+
             _bridge.Publish(connected ? null : _activity);
         }
     }

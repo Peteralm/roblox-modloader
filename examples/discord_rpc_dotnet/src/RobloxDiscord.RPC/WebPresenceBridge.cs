@@ -20,10 +20,15 @@ internal sealed class WebPresenceBridge : IDisposable
     private const string HandshakeGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     private const int MaxHandshakeBytes = 8 * 1024;
     private const int MaxClients = 4;
+    private const int MaxAcceptFailures = 8;
+
+    /// <summary>A terminator can straddle two reads, so a scan carries the previous three bytes.</summary>
+    private const int TerminatorOverlap = 3;
 
     private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan CloseTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan KeepAliveInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan AcceptRetryDelay = TimeSpan.FromMilliseconds(500);
 
     /// <summary>Browser origins allowed to read the activity; anything else is a local page snooping.</summary>
     private static readonly string[] AllowedOrigins =
@@ -35,8 +40,11 @@ internal sealed class WebPresenceBridge : IDisposable
 
     private readonly CancellationTokenSource _shutdown = new();
     private readonly List<BridgeClient> _clients = [];
+    private readonly List<Task> _acceptTasks = [];
+    private readonly List<Task> _serveTasks = [];
     private readonly TcpListener? _listener;
-    private string? _lastMessage;
+    private readonly TcpListener? _listenerV6;
+    private JsonObject? _lastActivity;
     private int _disposed;
 
     public WebPresenceBridge()
@@ -61,28 +69,53 @@ internal sealed class WebPresenceBridge : IDisposable
         }
 
         _listener = listener;
-        DiscordRpc.Logger.Info($"Web presence bridge listening on 127.0.0.1:{port}.");
 
-        _ = Task.Run(AcceptLoopAsync);
+        // A client dialling ws://localhost can resolve to ::1, which the IPv4 socket never answers.
+        // Both binds stay on loopback; neither ever accepts a routable address.
+        var listenerV6 = new TcpListener(IPAddress.IPv6Loopback, port);
+
+        try
+        {
+            listenerV6.Start();
+            _listenerV6 = listenerV6;
+        }
+        catch (SocketException ex)
+        {
+            DiscordRpc.Logger.Info(
+                $"Web presence bridge could not bind [::1]:{port} ({ex.SocketErrorCode}); only 127.0.0.1 will answer.");
+        }
+
+        DiscordRpc.Logger.Info(_listenerV6 is null
+            ? $"Web presence bridge listening on 127.0.0.1:{port}."
+            : $"Web presence bridge listening on 127.0.0.1:{port} and [::1]:{port}.");
+
+        _acceptTasks.Add(Task.Run(() => AcceptLoopAsync(listener)));
+
+        if (_listenerV6 is not null)
+        {
+            _acceptTasks.Add(Task.Run(() => AcceptLoopAsync(listenerV6)));
+        }
     }
 
     /// <summary>Broadcasts an activity to every connected Discord Web client; null clears it.</summary>
     public void Publish(JsonObject? activity)
     {
-        var message = new JsonObject
-        {
-            ["activity"] = activity,
-            ["pid"] = Environment.ProcessId,
-            ["socketId"] = SocketId
-        }.ToJsonString();
+        // The bridge is disabled, so no client can ever connect and nothing is worth remembering.
+        if (_listener is null) return;
 
         BridgeClient[] targets;
 
         lock (_clients)
         {
-            _lastMessage = message;
+            _lastActivity = activity;
             targets = _clients.ToArray();
         }
+
+        // Nobody is connected: the next client replays the activity remembered above, so skip
+        // serializing it on the engine thread here.
+        if (targets.Length == 0) return;
+
+        var message = BuildMessage(activity);
 
         foreach (var client in targets)
         {
@@ -95,17 +128,35 @@ internal sealed class WebPresenceBridge : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         _listener?.Stop();
+        _listenerV6?.Stop();
 
-        // Close politely first: a queued clear is still on the wire, and the token below cancels it.
+        // Cancel before anything that can throw: a faulting close must never strand a client, an
+        // accept loop, or a serve task with a live token.
+        _shutdown.Cancel();
+
+        // Close politely anyway: a queued clear may still be on the wire.
         var clients = Snapshot();
-        Task.WhenAll(clients.Select(client => client.CloseAsync())).Wait(CloseTimeout);
+
+        try
+        {
+            Task.WhenAll(clients.Select(client => client.CloseAsync())).Wait(CloseTimeout);
+        }
+        catch (Exception ex)
+        {
+            DiscordRpc.Logger.Error($"Web presence bridge failed to close a client cleanly: {ex.Message}");
+        }
 
         foreach (var client in clients)
         {
             Drop(client);
         }
 
-        _shutdown.Cancel();
+        // Accept loops first: once they are done no further serve task can be spawned, so the
+        // wait below covers every one of them and nothing outlives this dispose.
+        AwaitBounded(_acceptTasks);
+        AwaitBounded(_serveTasks);
+
+        _shutdown.Dispose();
     }
 
     private static int ResolvePort()
@@ -118,6 +169,37 @@ internal sealed class WebPresenceBridge : IDisposable
         DiscordRpc.Logger.Warn($"Ignoring {PortVariable}='{configured}', expected a port between 0 and 65535.");
 
         return DefaultPort;
+    }
+
+    /// <summary>
+    /// Wraps an activity in the arRPC envelope. The activity is cloned because a JsonNode accepts
+    /// exactly one parent, and the same instance is published again every time a client connects
+    /// or the desktop app hands the presence back.
+    /// </summary>
+    private static string BuildMessage(JsonObject? activity)
+    {
+        return new JsonObject
+        {
+            ["activity"] = activity?.DeepClone(),
+            ["pid"] = Environment.ProcessId,
+            ["socketId"] = SocketId
+        }.ToJsonString();
+    }
+
+    /// <summary>Waits for background tasks without letting a stuck one hold the mod's unload.</summary>
+    private static void AwaitBounded(List<Task> tasks)
+    {
+        lock (tasks)
+        {
+            try
+            {
+                Task.WhenAll(tasks).Wait(CloseTimeout);
+            }
+            catch (Exception)
+            {
+                // The tasks are cancelled and report their own failures; shutdown continues.
+            }
+        }
     }
 
     private BridgeClient[] Snapshot()
@@ -138,14 +220,32 @@ internal sealed class WebPresenceBridge : IDisposable
         client.Dispose();
     }
 
-    private async Task AcceptLoopAsync()
+    private async Task AcceptLoopAsync(TcpListener listener)
     {
+        var failures = 0;
+
         while (!_shutdown.IsCancellationRequested)
         {
             try
             {
-                var connection = await _listener!.AcceptTcpClientAsync(_shutdown.Token);
-                _ = Task.Run(() => ServeAsync(connection));
+                var connection = await listener.AcceptTcpClientAsync(_shutdown.Token).ConfigureAwait(false);
+
+                lock (_serveTasks)
+                {
+                    // Dispose has already drained the list; a task added now would never be waited
+                    // on, so the connection is closed instead.
+                    if (Volatile.Read(ref _disposed) != 0)
+                    {
+                        connection.Dispose();
+                        return;
+                    }
+
+                    // Completed probes and past clients are no longer worth waiting for at dispose.
+                    _serveTasks.RemoveAll(task => task.IsCompleted);
+                    _serveTasks.Add(Task.Run(() => ServeAsync(connection)));
+                }
+
+                failures = 0;
             }
             catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException ||
                                        Volatile.Read(ref _disposed) != 0)
@@ -154,8 +254,20 @@ internal sealed class WebPresenceBridge : IDisposable
             }
             catch (Exception ex)
             {
-                DiscordRpc.Logger.Error($"Web presence bridge stopped accepting clients: {ex.Message}");
-                return;
+                // A transient accept error (a peer resetting mid-handshake, for one) must not kill
+                // the bridge for the rest of the session.
+                if (++failures >= MaxAcceptFailures)
+                {
+                    DiscordRpc.Logger.Error(
+                        $"Web presence bridge stopped accepting clients after {failures} consecutive failures: {ex.Message}");
+
+                    return;
+                }
+
+                DiscordRpc.Logger.Warn(
+                    $"Web presence bridge failed to accept a client ({failures}/{MaxAcceptFailures}): {ex.Message}");
+
+                await Task.Delay(AcceptRetryDelay, _shutdown.Token).ConfigureAwait(false);
             }
         }
     }
@@ -170,20 +282,35 @@ internal sealed class WebPresenceBridge : IDisposable
             connection.NoDelay = true;
 
             var stream = connection.GetStream();
-            var request = await ReadHandshakeAsync(stream);
+            var (request, oversize) = await ReadHandshakeAsync(stream).ConfigureAwait(false);
+
+            if (request is null)
+            {
+                // A peer that sent nothing is a port probe, not a client worth a warning; one that
+                // flooded the handshake buffer is worth saying out loud.
+                if (oversize)
+                {
+                    DiscordRpc.Logger.Warn(
+                        $"Rejected a presence bridge client: handshake exceeded {MaxHandshakeBytes} bytes.");
+                }
+
+                await RejectAsync(stream).ConfigureAwait(false);
+
+                return;
+            }
+
             var rejection = Validate(request);
 
             if (rejection is not null)
             {
-                // A peer that sent nothing is a port probe, not a client worth a warning.
-                if (request is not null) DiscordRpc.Logger.Warn($"Rejected a presence bridge client: {rejection}.");
+                DiscordRpc.Logger.Warn($"Rejected a presence bridge client: {rejection}.");
 
-                await WriteAsync(stream, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-                connection.Dispose();
+                await RejectAsync(stream).ConfigureAwait(false);
+
                 return;
             }
 
-            await WriteAsync(stream, BuildHandshakeResponse(request!["sec-websocket-key"]));
+            await WriteAsync(stream, BuildHandshakeResponse(request["sec-websocket-key"])).ConfigureAwait(false);
 
             client = new BridgeClient(connection,
                 WebSocket.CreateFromStream(stream, isServer: true, subProtocol: null, KeepAliveInterval));
@@ -199,14 +326,16 @@ internal sealed class WebPresenceBridge : IDisposable
                     _clients.Add(client);
                     accepted = true;
 
-                    return _lastMessage;
+                    return _lastActivity is null ? null : BuildMessage(_lastActivity);
                 }
-            });
+            }).ConfigureAwait(false);
 
             if (!accepted)
             {
                 DiscordRpc.Logger.Warn("Rejected a presence bridge client: too many connected clients.");
-                await client.CloseAsync(WebSocketCloseStatus.PolicyViolation, "too many connected clients");
+                await client.CloseAsync(WebSocketCloseStatus.PolicyViolation, "too many connected clients")
+                    .ConfigureAwait(false);
+
                 return;
             }
 
@@ -215,7 +344,7 @@ internal sealed class WebPresenceBridge : IDisposable
 
             DiscordRpc.Logger.Info("Discord Web client connected to the presence bridge.");
 
-            await DrainAsync(client);
+            await DrainAsync(client).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
         {
@@ -244,6 +373,19 @@ internal sealed class WebPresenceBridge : IDisposable
         }
     }
 
+    /// <summary>Turns a peer away; the caller's finally owns the connection either way.</summary>
+    private async Task RejectAsync(NetworkStream stream)
+    {
+        try
+        {
+            await WriteAsync(stream, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n").ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            // A port probe that hung up before reading the answer; routine, not an error.
+        }
+    }
+
     /// <summary>Reads incoming frames until the client closes; the bridge never trusts their content.</summary>
     private async Task DrainAsync(BridgeClient client)
     {
@@ -251,7 +393,7 @@ internal sealed class WebPresenceBridge : IDisposable
 
         while (client.Socket.State == WebSocketState.Open)
         {
-            var received = await client.Socket.ReceiveAsync(buffer, _shutdown.Token);
+            var received = await client.Socket.ReceiveAsync(buffer, _shutdown.Token).ConfigureAwait(false);
             if (received.MessageType == WebSocketMessageType.Close) return;
         }
     }
@@ -260,7 +402,7 @@ internal sealed class WebPresenceBridge : IDisposable
     {
         try
         {
-            await client.SendAsync(resolve, _shutdown.Token);
+            await client.SendAsync(resolve, _shutdown.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or WebSocketException)
         {
@@ -300,30 +442,40 @@ internal sealed class WebPresenceBridge : IDisposable
             return $"origin '{origin ?? "none"}' is not a Discord client";
         }
 
-        lock (_clients)
-        {
-            if (_clients.Count >= MaxClients) return "too many connected clients";
-        }
-
+        // The client budget is enforced once, when the slot is actually taken in ServeAsync, so a
+        // client that loses that race is closed with 1008 instead of a bare HTTP 400.
         return null;
     }
 
-    private async Task<Dictionary<string, string>?> ReadHandshakeAsync(NetworkStream stream)
+    /// <summary>
+    /// Reads the HTTP upgrade request. Null headers mean nothing usable arrived, and Oversize
+    /// tells a handshake flood apart from a peer that simply hung up.
+    /// </summary>
+    private async Task<(Dictionary<string, string>? Headers, bool Oversize)> ReadHandshakeAsync(NetworkStream stream)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
         deadline.CancelAfter(HandshakeTimeout);
 
         var request = new StringBuilder();
         var buffer = new byte[1024];
+        var tail = string.Empty;
 
-        while (!request.ToString().Contains("\r\n\r\n"))
+        while (true)
         {
-            if (request.Length >= MaxHandshakeBytes) return null;
+            var read = await stream.ReadAsync(buffer, deadline.Token).ConfigureAwait(false);
+            if (read == 0) return (null, false);
 
-            var read = await stream.ReadAsync(buffer, deadline.Token);
-            if (read == 0) return null;
+            var chunk = Encoding.ASCII.GetString(buffer, 0, read);
+            request.Append(chunk);
 
-            request.Append(Encoding.ASCII.GetString(buffer, 0, read));
+            // Scanning the new chunk plus the carried tail keeps the whole read O(n); rebuilding
+            // the StringBuilder on every pass would be quadratic.
+            var scanned = tail + chunk;
+            if (scanned.Contains("\r\n\r\n", StringComparison.Ordinal)) break;
+
+            tail = scanned.Length <= TerminatorOverlap ? scanned : scanned[^TerminatorOverlap..];
+
+            if (request.Length >= MaxHandshakeBytes) return (null, true);
         }
 
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -336,7 +488,7 @@ internal sealed class WebPresenceBridge : IDisposable
             headers[line[..separator].Trim()] = line[(separator + 1)..].Trim();
         }
 
-        return headers;
+        return (headers, false);
     }
 
     private Task WriteAsync(NetworkStream stream, string response)

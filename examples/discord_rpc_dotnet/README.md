@@ -10,11 +10,15 @@ The mod publishes the same activity over two transports and always prefers the f
 | Transport | Target | Notes |
 |---|---|---|
 | Discord IPC | Discord desktop app | Handled by the `DiscordRichPresence` package, as before |
-| arRPC bridge | Discord Web | WebSocket server on `127.0.0.1:1337`, served by `WebPresenceBridge` |
+| arRPC bridge | Discord Web | WebSocket server on `127.0.0.1:1337` and `[::1]:1337`, served by `WebPresenceBridge` |
 
 While the desktop app is connected the bridge stays silent and clears whatever it had published, so
 the activity is never shown twice. When the desktop app is closed, the current activity is pushed to
 the web clients immediately, and vice versa when it comes back.
+
+At startup the bridge holds the first web publish for a few seconds: the desktop app announces that
+it connected but never announces that it is absent, so only a short wait can tell the two apart. A
+desktop app that is still starting therefore claims the presence before the web ever shows it.
 
 ## Using the Discord Web fallback
 
