@@ -40,12 +40,14 @@ internal sealed class ScriptEditorSession : IDisposable
         _uri = string.IsNullOrEmpty(uri) ? "file:///rml/main.luau" : uri;
         _pendingText = text;
         EditorHwnd = editorHwnd;
-        _webRoot = Path.Combine(context.AssemblyDirectory, "web");
+        // The assembly lives in '<mod>/dotnet'; the payload beside it lives at the mod root, which
+        // is what GetPath resolves against.
+        _webRoot = context.GetPath("web");
 
         _webView = new WebViewHost(gui);
         _lsp = new LuauLspBridge(
-            Path.Combine(context.AssemblyDirectory, "tools", "bin", "luau-lsp.exe"),
-            Path.Combine(context.AssemblyDirectory, "tools", "cache", "globalTypes.PluginSecurity.d.luau"));
+            context.GetPath("tools", "bin", "luau-lsp.exe"),
+            context.GetPath("tools", "cache", "globalTypes.PluginSecurity.d.luau"));
     }
 
     public int DocumentId { get; }
@@ -111,6 +113,26 @@ internal sealed class ScriptEditorSession : IDisposable
         if (_disposed || count <= 0) return;
 
         for (var i = 0; i < count; i++) _webView.PostMessage("{\"type\":\"editor.applied\"}");
+    }
+
+    /// <summary>
+    ///     Tells the editor that edits it is counting never reached the document. Without this the
+    ///     editor waits for an acknowledgement nobody will send and stops taking the engine's text
+    ///     for the rest of the session.
+    /// </summary>
+    public void OnEditsRejected(int count, string? reason)
+    {
+        if (_disposed || count <= 0) return;
+
+        ScriptEditorWebviewMod.Logger.Error(
+            $"the engine did not take {count} edit(s) for '{Name}': {reason ?? "no reason given"}");
+
+        var envelope = new JsonObject
+        {
+            ["type"] = "editor.rejected",
+            ["count"] = count
+        };
+        _webView.PostMessage(envelope.ToJsonString());
     }
 
     public void PushSourcemap(string? sourcemap)
@@ -193,7 +215,7 @@ internal sealed class ScriptEditorSession : IDisposable
 
             case "editor.edits":
                 if (message?["edits"] is JsonArray edits && edits.Count > 0)
-                    _agent.PushEdits(DocumentId, edits);
+                    PushEdits(edits);
 
                 break;
 
@@ -203,6 +225,26 @@ internal sealed class ScriptEditorSession : IDisposable
 
                 break;
         }
+    }
+
+    /// <summary>
+    ///     Hands one batch to the engine and answers the editor either way: a batch the agent
+    ///     refused was never queued, and the editor is counting every edit it sent.
+    /// </summary>
+    private void PushEdits(JsonArray edits)
+    {
+        var count = edits.Count;
+
+        _agent.PushEditsAsync(DocumentId, edits).ContinueWith(task =>
+        {
+            if (task.IsCompletedSuccessfully && task.Result) return;
+
+            var reason = task.IsFaulted
+                ? task.Exception?.GetBaseException().Message
+                : "the agent refused the batch";
+
+            _gui.Post(() => OnEditsRejected(count, reason));
+        }, TaskContinuationOptions.ExecuteSynchronously);
     }
 
     private void OnLspServerMessage(string json)

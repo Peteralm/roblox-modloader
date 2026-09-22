@@ -57,6 +57,21 @@
       // once the engine has caught up.
       let missedRemoteText = false;
 
+      // Monaco counts columns in UTF-16 code units; the engine addresses a line in the UTF-8 buffer
+      // it keeps the source in, so one non-ASCII character earlier in the line shifts every range
+      // that follows it and the write lands in the wrong place. Ranges are expressed against the
+      // document as it was *before* the change, so that is the text they have to be measured on.
+      const utf8 = new TextEncoder();
+      let previousText = model.getValue();
+
+      function engineColumn(line, column) {
+        if (typeof line !== 'string' || column <= 1) return column;
+        const prefix = line.slice(0, column - 1);
+        // eslint-disable-next-line no-control-regex
+        if (!/[^\u0000-\u007F]/.test(prefix)) return column;
+        return utf8.encode(prefix).length + 1;
+      }
+
       function applyRemoteText(text) {
         if (typeof text !== 'string') return;
         if (unacknowledgedEdits > 0) { missedRemoteText = true; return; }
@@ -68,17 +83,22 @@
           editor.executeEdits('rml-engine', [{ range: model.getFullModelRange(), text, forceMoveMarkers: true }]);
         } finally {
           applyingRemoteText = false;
+          previousText = model.getValue();
         }
       }
 
       model.onDidChangeContent(function (event) {
         if (applyingRemoteText) return;
+        const before = previousText.split('\n');
+        previousText = model.getValue();
         const edits = event.changes.map(function (change) {
+          const startLine = change.range.startLineNumber;
+          const endLine = change.range.endLineNumber;
           return {
-            startLine: change.range.startLineNumber,
-            startCharacter: change.range.startColumn,
-            endLine: change.range.endLineNumber,
-            endCharacter: change.range.endColumn,
+            startLine: startLine,
+            startCharacter: engineColumn(before[startLine - 1], change.range.startColumn),
+            endLine: endLine,
+            endCharacter: engineColumn(before[endLine - 1], change.range.endColumn),
             text: change.text
           };
         });
@@ -101,6 +121,18 @@
           if (unacknowledgedEdits === 0 && missedRemoteText) {
             missedRemoteText = false;
             RMLHost.send({ type: 'editor.resync' });
+          }
+        } else if (msg.type === 'editor.rejected') {
+          // Edits the engine never took. Stop counting them -- nothing will ever acknowledge them
+          // -- and take the engine's copy back, because what the user typed did not reach it.
+          const dropped = typeof msg.count === 'number' ? msg.count : 1;
+          unacknowledgedEdits = Math.max(0, unacknowledgedEdits - dropped);
+          console.error('the engine rejected ' + dropped + ' edit(s); resyncing from the document');
+          if (unacknowledgedEdits === 0) {
+            missedRemoteText = false;
+            RMLHost.send({ type: 'editor.resync' });
+          } else {
+            missedRemoteText = true;
           }
         } else if (msg.type === 'editor.engineText') {
           // Answer to editor.verify: what the engine holds, for tests/monaco-sync.mjs to compare.

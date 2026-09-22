@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using RML.Core.Api;
 using RML.Core.Modding;
 using RML.Logging;
@@ -39,7 +40,10 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
     private readonly Dictionary<IntPtr, bool> _knownWidgets = [];
     private readonly Queue<IntPtr> _newWidgets = new();
     private readonly List<PendingDocument> _pending = [];
-    private readonly Dictionary<int, ScriptEditorSession> _sessions = [];
+
+    // Mutated on the Qt GUI thread by the reconcile loop, and torn down on whichever thread unloads
+    // the mod; those two never meet, so the map has to hold them apart itself.
+    private readonly ConcurrentDictionary<int, ScriptEditorSession> _sessions = new();
 
     private EngineAgent? _agent;
     private string? _agentFailure;
@@ -155,7 +159,7 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
 
         if (!_editDataModelLive || _agentStarting) return false;
 
-        _agent ??= new EngineAgent(System.IO.Path.Combine(Context.AssemblyDirectory, "luau", "agent.luau"));
+        _agent ??= new EngineAgent(Context.GetPath("luau", "agent.luau"));
         _agentStarting = true;
 
         _agent.StartAsync().ContinueWith(task =>
@@ -232,9 +236,18 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
                     break;
 
                 case "text":
-                    if (!report.Stale && report.Text is { } text &&
-                        _sessions.TryGetValue(report.Id, out var textTarget))
+                    if (report.Text is { } text && _sessions.TryGetValue(report.Id, out var textTarget))
                         textTarget.OnEngineText(text);
+
+                    break;
+
+                // A write the engine refused: the editor is counting that edit and has to be told,
+                // or it waits for an acknowledgement that never comes.
+                case "rejected":
+                    if (_sessions.TryGetValue(report.Id, out var rejectedTarget))
+                        rejectedTarget.OnEditsRejected(report.Count, report.Message);
+                    else
+                        Logger.Error($"the engine agent reported: {report.Message}");
 
                     break;
 
@@ -243,7 +256,7 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
                     break;
 
                 case "checked":
-                    FinishAttach(report.Id, report.Ok, report.Message);
+                    FinishAttach(report.Id, report.Ok, report.Message, report.Text);
                     break;
             }
 
@@ -267,7 +280,7 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
     {
         _pending.RemoveAll(document => document.Id == documentId);
 
-        if (_sessions.Remove(documentId, out var session))
+        if (_sessions.TryRemove(documentId, out var session))
         {
             _knownWidgets.Remove(session.EditorHwnd);
             session.Dispose();
@@ -336,8 +349,11 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
     /// <summary>
     ///     Puts the overlay up only after a write has round-tripped through the engine on this build.
     ///     A failed check leaves Studio's own editor in place, which still works.
+    ///     Monaco opens on the text the check just read, not on the text the open event carried: the
+    ///     document may have been typed into since, and every range the editor then sends is
+    ///     expressed against the buffer it was opened with.
     /// </summary>
-    private void FinishAttach(int documentId, bool ok, string? message)
+    private void FinishAttach(int documentId, bool ok, string? message, string? text)
     {
         var document = _pending.FirstOrDefault(candidate => candidate.Id == documentId);
         if (document is null) return;
@@ -356,8 +372,8 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
             return;
         }
 
-        var session = new ScriptEditorSession(_gui, _agent, document.Id, document.Name, document.Uri, document.Text,
-            document.Hwnd, Context);
+        var session = new ScriptEditorSession(_gui, _agent, document.Id, document.Name, document.Uri,
+            text ?? document.Text, document.Hwnd, Context);
 
         _pending.Remove(document);
         _sessions[document.Id] = session;
@@ -449,9 +465,11 @@ public sealed class ScriptEditorWebviewMod : ModBase, IDataModelAware
 
     private void DisposeAllSessions()
     {
-        foreach (var session in _sessions.Values) session.Dispose();
-
-        _sessions.Clear();
+        // Take each one out before disposing it: a session the reconcile loop can still find is a
+        // session it can still call into while it is being torn down.
+        foreach (var id in _sessions.Keys.ToArray())
+            if (_sessions.TryRemove(id, out var session))
+                session.Dispose();
     }
 
     /// <summary>A document the engine announced, waiting for the window it belongs to.</summary>

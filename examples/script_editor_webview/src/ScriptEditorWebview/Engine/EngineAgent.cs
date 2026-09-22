@@ -15,7 +15,13 @@ namespace ScriptEditorWebview.Engine;
 /// </summary>
 internal sealed class EngineAgent : IDisposable
 {
+    /// <summary>How long Dispose gives stop, and then the calls already inside the engine.</summary>
+    private const int SettleTimeoutMs = 2000;
+
     private readonly string _agentPath;
+
+    private int _inFlight;
+    private volatile bool _stopping;
 
     private LuauRef? _poll;
     private LuauRef? _push;
@@ -35,18 +41,27 @@ internal sealed class EngineAgent : IDisposable
 
     public void Dispose()
     {
+        _stopping = true;
+
         var stop = _stop;
         _stop = null;
 
         if (stop is not null)
             try
             {
-                stop.InvokeAsync();
+                // Awaited, not fired and forgotten: the refs below are about to be released, and a
+                // release that lands while the engine is inside one of these calls frees a handle
+                // the VM still holds.
+                if (!stop.InvokeAsync().Wait(SettleTimeoutMs))
+                    ScriptEditorWebviewMod.Logger.Error(
+                        $"the engine agent did not answer stop within {SettleTimeoutMs} ms");
             }
             catch (Exception ex)
             {
                 ScriptEditorWebviewMod.Logger.Debug($"stopping the engine agent failed: {ex.Message}");
             }
+
+        WaitForCallsToSettle();
 
         _push?.Dispose();
         _poll?.Dispose();
@@ -64,6 +79,47 @@ internal sealed class EngineAgent : IDisposable
         _openScratch = null;
         _resync = null;
         _table = null;
+    }
+
+    /// <summary>
+    ///     Every call into the agent is counted here, because Dispose has to know what the engine
+    ///     is still holding before it releases the refs those calls were made through.
+    /// </summary>
+    private Task<LuauValue> InvokeTracked(LuauRef target, params object?[] args)
+    {
+        Interlocked.Increment(ref _inFlight);
+
+        try
+        {
+            return target.InvokeAsync(args).ContinueWith(task =>
+            {
+                Interlocked.Decrement(ref _inFlight);
+                return task.GetAwaiter().GetResult();
+            }, TaskContinuationOptions.ExecuteSynchronously);
+        }
+        catch
+        {
+            Interlocked.Decrement(ref _inFlight);
+            throw;
+        }
+    }
+
+    private void WaitForCallsToSettle()
+    {
+        var deadline = Environment.TickCount64 + SettleTimeoutMs;
+        var spin = new SpinWait();
+
+        while (Volatile.Read(ref _inFlight) > 0)
+        {
+            if (Environment.TickCount64 >= deadline)
+            {
+                ScriptEditorWebviewMod.Logger.Error(
+                    $"{Volatile.Read(ref _inFlight)} engine call(s) never came back; releasing the agent refs anyway");
+                return;
+            }
+
+            spin.SpinOnce();
+        }
     }
 
     /// <summary>
@@ -131,11 +187,12 @@ internal sealed class EngineAgent : IDisposable
     /// <summary>Asks the agent to announce every open document again, for the Mods menu reattach.</summary>
     public void Resync()
     {
-        if (_resync is null) return;
+        var resync = _resync;
+        if (resync is null || _stopping) return;
 
         try
         {
-            _resync.InvokeAsync().ContinueWith(
+            InvokeTracked(resync).ContinueWith(
                 task => ScriptEditorWebviewMod.Logger.Error(
                     $"resyncing the open documents failed: {task.Exception?.GetBaseException().Message}"),
                 TaskContinuationOptions.OnlyOnFaulted);
@@ -146,10 +203,15 @@ internal sealed class EngineAgent : IDisposable
         }
     }
 
-    /// <summary>Queues one batch of editor edits. Fire and forget: the engine owns the ordering.</summary>
-    public void PushEdits(int documentId, JsonArray edits)
+    /// <summary>
+    ///     Queues one batch of editor edits and answers whether the engine took it. A batch the
+    ///     agent refused was never queued, so the caller has to tell the editor: it counts the
+    ///     edits it is owed, and an edit nobody will ever acknowledge stops its sync for good.
+    /// </summary>
+    public async Task<bool> PushEditsAsync(int documentId, JsonArray edits)
     {
-        if (_push is null || edits.Count == 0) return;
+        var push = _push;
+        if (push is null || _stopping || edits.Count == 0) return false;
 
         var payload = new JsonObject
         {
@@ -159,23 +221,22 @@ internal sealed class EngineAgent : IDisposable
 
         try
         {
-            _push.InvokeAsync(payload).ContinueWith(
-                task => ScriptEditorWebviewMod.Logger.Error(
-                    $"queueing an editor edit failed: {task.Exception?.GetBaseException().Message}"),
-                TaskContinuationOptions.OnlyOnFaulted);
+            return (await InvokeTracked(push, payload)).AsBoolean();
         }
         catch (Exception ex)
         {
             ScriptEditorWebviewMod.Logger.Error($"queueing an editor edit failed: {ex.Message}");
+            return false;
         }
     }
 
     /// <summary>Drains everything that happened in the engine since the previous call.</summary>
     public async Task<AgentPoll?> PollAsync()
     {
-        if (_poll is null) return null;
+        var poll = _poll;
+        if (poll is null || _stopping) return null;
 
-        var json = (await _poll.InvokeAsync()).AsString();
+        var json = (await InvokeTracked(poll)).AsString();
         if (string.IsNullOrEmpty(json)) return null;
 
         try
@@ -192,11 +253,12 @@ internal sealed class EngineAgent : IDisposable
     /// <summary>Text the engine holds for one document, for the sync check the editor can request.</summary>
     public async Task<string?> TextAsync(int documentId)
     {
-        if (_text is null) return null;
+        var text = _text;
+        if (text is null || _stopping) return null;
 
         try
         {
-            return (await _text.InvokeAsync(documentId)).AsString();
+            return (await InvokeTracked(text, documentId)).AsString();
         }
         catch (Exception ex)
         {
@@ -208,11 +270,12 @@ internal sealed class EngineAgent : IDisposable
     /// <summary>Opens a scratch script document, so an automated check has something to type into.</summary>
     public void OpenScratchDocument()
     {
-        if (_openScratch is null) return;
+        var openScratch = _openScratch;
+        if (openScratch is null || _stopping) return;
 
         try
         {
-            _openScratch.InvokeAsync().ContinueWith(
+            InvokeTracked(openScratch).ContinueWith(
                 task => ScriptEditorWebviewMod.Logger.Error(
                     $"opening the scratch document failed: {task.Exception?.GetBaseException().Message}"),
                 TaskContinuationOptions.OnlyOnFaulted);
@@ -230,11 +293,12 @@ internal sealed class EngineAgent : IDisposable
     /// </summary>
     public void RequestCheck(int documentId)
     {
-        if (_check is null) return;
+        var check = _check;
+        if (check is null || _stopping) return;
 
         try
         {
-            _check.InvokeAsync(documentId).ContinueWith(
+            InvokeTracked(check, documentId).ContinueWith(
                 task => ScriptEditorWebviewMod.Logger.Error(
                     $"asking the engine agent for a self-check failed: {task.Exception?.GetBaseException().Message}"),
                 TaskContinuationOptions.OnlyOnFaulted);

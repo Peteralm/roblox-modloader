@@ -15,8 +15,8 @@ internal sealed class AgentPoll
 }
 
 /// <summary>
-///     One thing that happened in the engine: a document opened or closed, its text changed, or a
-///     write failed. <see cref="Stale" /> marks a text report the editor has already typed past.
+///     One thing that happened in the engine: a document opened or closed, its text changed, a
+///     write failed, or the attach self-check answered.
 /// </summary>
 internal sealed class AgentEvent
 {
@@ -30,7 +30,8 @@ internal sealed class AgentEvent
 
     [JsonPropertyName("text")] public string? Text { get; init; }
 
-    [JsonPropertyName("stale")] public bool Stale { get; init; }
+    /// <summary>How many of the editor's edits a "rejected" report covers.</summary>
+    [JsonPropertyName("count")] public int Count { get; init; }
 
     [JsonPropertyName("ok")] public bool Ok { get; init; }
 

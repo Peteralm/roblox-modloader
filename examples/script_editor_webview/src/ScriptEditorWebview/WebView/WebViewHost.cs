@@ -108,6 +108,16 @@ internal sealed class WebViewHost(GuiDispatcher gui) : IDisposable
         }
 
         _controller = controller;
+
+        if (!Directory.Exists(_webRootPath))
+        {
+            ScriptEditorWebviewMod.Logger.Error(
+                $"web assets missing at '{_webRootPath}' — they must sit at the mod root, beside 'dotnet/'");
+            controller.Close();
+            _controller = null;
+            return;
+        }
+
         _webView = controller.CoreWebView2;
 
         _webView.WebMessageReceived += OnWebMessageReceived;
