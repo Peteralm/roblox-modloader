@@ -3,6 +3,7 @@
 #include "resource.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace RBX::Graphics
@@ -32,5 +33,20 @@ namespace RBX::Graphics
 	{
 	public:
 		virtual void reload() = 0;
+
+		std::shared_ptr<Shader> shaders[3];
+		std::uint32_t buffer_mask;
+		std::uint32_t texture_mask;
+
+		const std::shared_ptr<Shader>& get_shader(const Shader::Type type) const
+		{
+			return shaders[static_cast<std::uint32_t>(type)];
+		}
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+	RML_ASSERT_OFFSET(ShaderProgram, shaders, 56);
+	RML_ASSERT_OFFSET(ShaderProgram, buffer_mask, 104);
+	RML_ASSERT_SIZE(ShaderProgram, 112);
+	RML_LAYOUT_DIAGNOSTIC_POP()
 }

@@ -49,6 +49,11 @@ namespace RBX::Graphics
 		std::uint32_t anisotropy;
 		float lod_min;
 		float lod_max;
+
+		static SamplerState make(const Filter filter, const Address address = Address_Wrap, const std::uint32_t anisotropy = 0)
+		{
+			return {static_cast<std::uint8_t>(filter), static_cast<std::uint8_t>(address), 0, 0, anisotropy, 0.0f, 3.4028235e38f};
+		}
 	};
 
 	struct RasterizerState
@@ -71,6 +76,11 @@ namespace RBX::Graphics
 		std::uint8_t reserved_2;
 		std::uint8_t depth_clip_mode;
 		std::int32_t depth_bias;
+
+		static RasterizerState make(const CullMode cull, const std::int32_t bias = 0, const FillMode fill = Fill_Solid)
+		{
+			return {static_cast<std::uint8_t>(cull), static_cast<std::uint8_t>(fill), 0, 0, bias};
+		}
 	};
 
 	struct BlendState
@@ -104,6 +114,31 @@ namespace RBX::Graphics
 		std::uint8_t dst_alpha;
 		std::uint8_t alpha_to_coverage;
 		std::uint8_t reserved_9[3];
+
+		static BlendState make(const Factor src, const Factor dst, const std::uint8_t mask = Color_All)
+		{
+			return make(src, dst, src, dst, mask);
+		}
+
+		static BlendState make(const Factor src_rgb, const Factor dst_rgb, const Factor src_alpha, const Factor dst_alpha, const std::uint8_t mask = Color_All)
+		{
+			return {mask, {0, 0, 0}, static_cast<std::uint8_t>(src_rgb), static_cast<std::uint8_t>(dst_rgb), static_cast<std::uint8_t>(src_alpha), static_cast<std::uint8_t>(dst_alpha), 0, {0, 0, 0}};
+		}
+
+		static BlendState opaque()
+		{
+			return make(Factor_One, Factor_Zero);
+		}
+
+		static BlendState alpha_blend()
+		{
+			return make(Factor_SrcAlpha, Factor_InvSrcAlpha);
+		}
+
+		bool blending_needed() const
+		{
+			return src_rgb != Factor_One || dst_rgb != Factor_Zero || src_alpha != Factor_One || dst_alpha != Factor_Zero;
+		}
 	};
 
 	struct DepthState
@@ -116,13 +151,31 @@ namespace RBX::Graphics
 			Function_Greater,
 			Function_GreaterEqual,
 			Function_Equal,
-			Function_NotEqual
+			Function_NotEqual,
+			Function_Never
+		};
+
+		enum StencilMode : std::uint8_t
+		{
+			Stencil_None,
+			Stencil_IsNotZero,
+			Stencil_IsZero,
+			Stencil_IsOne,
+			Stencil_WriteOne,
+			Stencil_IncrementIfEqualRef,
+			Stencil_DecrementIfEqualRef,
+			Stencil_LessEqualRef
 		};
 
 		std::uint8_t function;
 		std::uint8_t write;
 		std::uint8_t stencil_mode;
 		std::uint8_t reserved_3;
+
+		static DepthState make(const Function function, const bool write, const StencilMode stencil = Stencil_None)
+		{
+			return {static_cast<std::uint8_t>(function), static_cast<std::uint8_t>(write), static_cast<std::uint8_t>(stencil), 0};
+		}
 	};
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()

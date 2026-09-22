@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RobloxModLoader/roblox/graphics/texture.hpp"
+#include "RobloxModLoader/roblox/graphics/texture_ref.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 
 #include <memory>
@@ -8,7 +9,6 @@
 namespace RBX::Graphics
 {
 	class VisualEngine;
-	class TextureRefData;
 
 	class RTPool
 	{
@@ -18,15 +18,6 @@ namespace RBX::Graphics
 	private:
 		RTPool() = delete;
 	};
-
-	struct TextureRef
-	{
-		std::shared_ptr<TextureRefData> data;
-	};
-
-	RML_LAYOUT_DIAGNOSTIC_PUSH()
-	RML_ASSERT_SIZE(TextureRef, 16);
-	RML_LAYOUT_DIAGNOSTIC_POP()
 
 	class MainRenderTargets
 	{

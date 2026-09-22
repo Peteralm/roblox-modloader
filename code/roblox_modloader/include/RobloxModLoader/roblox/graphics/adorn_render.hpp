@@ -2,6 +2,8 @@
 
 #include "RobloxModLoader/roblox/adorn.hpp"
 #include "RobloxModLoader/roblox/graphics/buffer.hpp"
+#include "RobloxModLoader/roblox/graphics/material.hpp"
+#include "RobloxModLoader/roblox/graphics/render_queue.hpp"
 #include "RobloxModLoader/roblox/graphics/shader.hpp"
 #include "RobloxModLoader/roblox/graphics/texture.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
@@ -20,7 +22,6 @@ namespace RBX::Graphics
 {
 	class VisualEngine;
 	class VertexStreamerMigrationLayer;
-	class Technique;
 
 	struct AdornVertex
 	{
@@ -29,13 +30,12 @@ namespace RBX::Graphics
 		Vector3 normal;
 	};
 
-	struct AdornMesh
+	struct AdornMesh : Renderable
 	{
-		const void* vtable;
 		Adorn::Material material;
 		std::uint32_t reserved_12;
 		const GeometryBatch* batch;
-		std::int32_t view_depth;
+		float view_depth;
 		float radius;
 		Vector4 extra;
 		std::int32_t z_index;
@@ -44,6 +44,9 @@ namespace RBX::Graphics
 		Vector3 translation;
 		float reserved_116;
 		std::shared_ptr<Texture> texture;
+
+	private:
+		AdornMesh() = delete;
 	};
 
 	class AdornRender : public Adorn
@@ -60,7 +63,7 @@ namespace RBX::Graphics
 		union {
 			rbx::signal<void()> unbind_resources;
 		};
-		std::int32_t viewport_height_at_submit;
+		float viewport_height_at_submit;
 		CoordinateFrame object_to_world;
 		std::uint32_t reserved_252;
 		std::shared_ptr<Texture> current_texture;
@@ -109,6 +112,27 @@ namespace RBX::Graphics
 		Technique* get_technique(const Adorn::Pass pass, const Adorn::Material material) const
 		{
 			return techniques[pass][material].get();
+		}
+
+		static RenderQueue::Id queue_id_for(const Adorn::Pass pass, const bool always_on_top_adorns = true)
+		{
+			switch (pass)
+			{
+				case Adorn::Pass_Opaque:
+					return RenderQueue::Id_Opaque;
+				case Adorn::Pass_Default:
+					return RenderQueue::Id_OpaqueAdorns;
+				case Adorn::Pass_Transparent:
+					return RenderQueue::Id_Transparent;
+				case Adorn::Pass_DepthWrite:
+					return RenderQueue::Id_OnTopWithDepth;
+				case Adorn::Pass_Blend:
+					return RenderQueue::Id_OnTopReadOnlyDepth;
+				case Adorn::Pass_AlwaysOnTop:
+					return always_on_top_adorns ? RenderQueue::Id_AlwaysOnTopAdorns : RenderQueue::Id_AlwaysOnTop;
+				default:
+					return RenderQueue::Id_Count;
+			}
 		}
 
 		~AdornRender() override

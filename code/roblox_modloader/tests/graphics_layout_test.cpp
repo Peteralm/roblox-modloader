@@ -4,8 +4,11 @@
 #include "RobloxModLoader/roblox/graphics/device.hpp"
 #include "RobloxModLoader/roblox/graphics/device_context.hpp"
 #include "RobloxModLoader/roblox/graphics/global_shader_data.hpp"
+#include "RobloxModLoader/roblox/graphics/material.hpp"
 #include "RobloxModLoader/roblox/graphics/render_camera.hpp"
+#include "RobloxModLoader/roblox/graphics/render_queue.hpp"
 #include "RobloxModLoader/roblox/graphics/scene_manager.hpp"
+#include "RobloxModLoader/roblox/graphics/texture_ref.hpp"
 
 #include <cstddef>
 #include <doctest/doctest.h>
@@ -79,5 +82,55 @@ TEST_CASE("adorn interface keeps the dumped slot order")
 	CHECK(rml::vtable_index_of(&Adorn::explosion, *static_cast<const Sphere*>(nullptr)) == 36);
 	CHECK(rml::vtable_index_of(&Adorn::ray, *static_cast<const Ray*>(nullptr), *color) == 43);
 	CHECK(rml::vtable_index_of(&Adorn::draw_font2d_impl, nullptr, nullptr) == 55);
+#endif
+}
+
+TEST_CASE("render queue, technique and texture ref mirrors keep the measured layout")
+{
+	using namespace RBX::Graphics;
+	static_assert(sizeof(RenderOperation) == 40);
+	static_assert(sizeof(RenderQueueGroup) == 24);
+	static_assert(sizeof(RenderQueue) == 552);
+	static_assert(offsetof(RenderQueue, groups) == 112);
+	static_assert(offsetof(RenderQueue, features) == 544);
+	static_assert(RenderQueue::Id_Count == 18);
+	static_assert(RenderQueue::Pass_Count == 21);
+	static_assert(RenderQueue::Id_AlwaysOnTopAdorns == 15);
+	static_assert(RenderQueue::Id_ScreenOnTopOfBlur == 17);
+	static_assert(RenderQueue::Pass_Backfaces == 7);
+	static_assert(sizeof(Technique) == 136);
+	static_assert(offsetof(Technique, program) == 40);
+	static_assert(offsetof(Technique, textures) == 64);
+	static_assert(sizeof(Material) == 40);
+	static_assert(sizeof(ShaderProgram) == 112);
+	static_assert(sizeof(ImageInfo) == 88);
+	static_assert(sizeof(TextureRefData) == 152);
+	static_assert(offsetof(TextureRefData, status) == 144);
+	static_assert(sizeof(TextureRef) == 16);
+	static_assert(std::is_abstract_v<Renderable>);
+	static_assert(sizeof(AdornMesh) == 136);
+	static_assert(std::is_base_of_v<Renderable, AdornMesh>);
+
+	const RenderOperation op = RenderOperation::make(nullptr, nullptr, nullptr, 10.0f, 2.0f, 3);
+	CHECK(op.reserved_37 == 3);
+	CHECK(op.reserved_38 == 5);
+	CHECK(op.reserved_39 == 4);
+	CHECK(op.clip_at_distance(7.0f, false));
+	CHECK_FALSE(op.clip_at_distance(9.0f, false));
+	CHECK(op.clip_at_distance(13.0f, true));
+	CHECK_FALSE(op.clip_at_distance(11.0f, true));
+
+	const BlendState opaque = BlendState::opaque();
+	CHECK_FALSE(opaque.blending_needed());
+	CHECK(BlendState::alpha_blend().blending_needed());
+	CHECK(BlendState::make(BlendState::Factor_Zero, BlendState::Factor_One).blending_needed());
+	CHECK(AdornRender::queue_id_for(RBX::Adorn::Pass_Default) == RenderQueue::Id_OpaqueAdorns);
+	CHECK(AdornRender::queue_id_for(RBX::Adorn::Pass_Composite) == RenderQueue::Id_Count);
+
+#if !defined(_MSC_VER)
+	const ViewContext* view = nullptr;
+	RenderableStats* stats = nullptr;
+	CHECK(rml::vtable_index_of(&Renderable::render, nullptr, *view, nullptr, std::size_t{}, *stats) == 3);
+	CHECK(rml::vtable_index_of(&Renderable::set_instance_index_buffer_offset_count, 0u, 0u) == 5);
 #endif
 }
