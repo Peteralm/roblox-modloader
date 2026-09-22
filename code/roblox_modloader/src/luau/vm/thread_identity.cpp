@@ -131,6 +131,90 @@ namespace rml::luau::vm
 		return true;
 	}
 
+	struct ContextAccess
+	{
+		lua_State* state;
+		RBX::Luau::ThreadIdentityContext* context;
+	};
+
+	static void resolve_context(void* ctx)
+	{
+		auto* call = static_cast<ContextAccess*>(ctx);
+		call->context = nullptr;
+
+		const auto get_context = g_pointers ? g_pointers->m_roblox_pointers.rbx_thread_identity_context : nullptr;
+		if (!get_context || !call->state)
+			return;
+
+		auto* candidate = static_cast<RBX::Luau::ThreadIdentityContext*>(get_context(call->state));
+		if (!candidate || candidate->bound_state != call->state)
+		{
+			report_bad_identity_context(candidate, call->state);
+			return;
+		}
+
+		call->context = candidate;
+	}
+
+	struct ContextWrite
+	{
+		RBX::Luau::ThreadIdentityContext* context;
+		RBX::Luau::ExtendedIdentity identity;
+		std::uint64_t capabilities;
+	};
+
+	static void write_context(void* ctx)
+	{
+		const auto* call = static_cast<ContextWrite*>(ctx);
+		call->context->identity = call->identity;
+		call->context->capabilities = call->capabilities;
+	}
+
+	IdentitySnapshot elevate_scoped(lua_State* L, const RBX::Security::Permissions identity,
+	                                const std::uint64_t capabilities) noexcept
+	{
+		IdentitySnapshot snapshot{};
+		if (!L)
+			return snapshot;
+
+		// The extra space still has to carry the elevation: that is what RML's own
+		// bindings read.
+		set_identity(L, identity, capabilities, false);
+
+		ContextAccess access_call{L, nullptr};
+		if (!utils::guarded_invoke(&resolve_context, &access_call) || !access_call.context)
+			return snapshot;
+
+		snapshot.identity = access_call.context->identity;
+		snapshot.capabilities = access_call.context->capabilities;
+		snapshot.captured = true;
+
+		ContextWrite write_call{access_call.context, {identity, 0}, capabilities};
+		if (!utils::guarded_invoke(&write_context, &write_call))
+		{
+			RML_ERROR("Elevating the identity context faulted; the chunk runs unelevated");
+			snapshot.captured = false;
+		}
+
+		return snapshot;
+	}
+
+	void restore_identity(lua_State* L, const IdentitySnapshot& snapshot) noexcept
+	{
+		if (!snapshot.captured || !L)
+			return;
+
+		ContextAccess access_call{L, nullptr};
+		if (!utils::guarded_invoke(&resolve_context, &access_call) || !access_call.context)
+			return;
+
+		ContextWrite write_call{access_call.context, snapshot.identity, snapshot.capabilities};
+		if (!utils::guarded_invoke(&write_context, &write_call))
+		{
+			RML_ERROR("Restoring the identity context faulted; it may stay elevated");
+		}
+	}
+
 	RBX::Luau::TaskState task_state(lua_State*) noexcept
 	{
 		return RBX::Luau::TaskState::None;

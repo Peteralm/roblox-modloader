@@ -270,6 +270,27 @@ namespace rml::luau
 		return want_result && produced >= 2 ? read_value(co, 2, host) : Value{};
 	}
 
+	// Hands the identity context back however run_chunk leaves: normal return, early
+	// return on a load error, or an exception on the way out.
+	struct ScopedIdentityRestore
+	{
+		lua_State* state;
+		vm::IdentitySnapshot snapshot;
+
+		ScopedIdentityRestore(lua_State* thread, vm::IdentitySnapshot previous) :
+		    state(thread), snapshot(previous)
+		{
+		}
+
+		ScopedIdentityRestore(const ScopedIdentityRestore&) = delete;
+		ScopedIdentityRestore& operator=(const ScopedIdentityRestore&) = delete;
+
+		~ScopedIdentityRestore()
+		{
+			vm::restore_identity(state, snapshot);
+		}
+	};
+
 	static WorkResult run_chunk(ScriptHost& host, RunChunk& chunk)
 	{
 		if (chunk.owner && chunk.generation != host.generation_of(chunk.owner->name))
@@ -291,7 +312,13 @@ namespace rml::luau
 
 		auto* co = thread->get();
 
-		vm::set_identity(co, RBX::Security::Permissions::RobloxEngine, RBX::Security::FULL_CAPABILITIES, false);
+		// Studio gates settings() and friends on the identity context, not on the extra
+		// space, and a fresh coroutine arrives with the engine's default identity. Elevate
+		// the context for as long as this chunk runs and hand it back afterwards: contexts
+		// are pooled, so a permanent write would follow the object into the next thread.
+		const auto previous = vm::elevate_scoped(co, RBX::Security::Permissions::RobloxEngine,
+		    RBX::Security::FULL_CAPABILITIES);
+		const ScopedIdentityRestore restore{co, previous};
 
 		const auto label = std::format("script '{}'", chunk.chunk_name);
 		const auto wrapped = push_xpcall(co);
@@ -339,7 +366,11 @@ namespace rml::luau
 
 		auto* co = thread->get();
 
-		vm::set_identity(co, RBX::Security::Permissions::RobloxEngine, RBX::Security::FULL_CAPABILITIES, false);
+		// Same story as run_chunk: a callback invoked from .NET runs on a fresh coroutine
+		// that arrives with the engine's default identity.
+		const auto previous = vm::elevate_scoped(co, RBX::Security::Permissions::RobloxEngine,
+		    RBX::Security::FULL_CAPABILITIES);
+		const ScopedIdentityRestore restore{co, previous};
 
 		const auto label = std::string{"a script callback"};
 		const auto wrapped = push_xpcall(co);
