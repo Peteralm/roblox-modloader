@@ -6,6 +6,8 @@
 #include "RobloxModLoader/qt/qstring.hpp"
 #include "RobloxModLoader/qt/qt_module.hpp"
 
+#include <cstdint>
+
 RML_LOG_SCOPE("Qt");
 
 namespace rml::qt
@@ -118,6 +120,19 @@ namespace rml::qt
 			return nullptr;
 		const QString title(caption);
 		return static_cast<DockPanel*>(fn(this, title.data(), static_cast<int>(area), nullptr));
+	}
+
+	DockPanel* DockManager::add_panel(
+	    const std::string_view caption, const int width, const int height, const DockArea area)
+	{
+		static const auto fn = detail::docking_optional<void* (*)(void*, const void*, const void*, int, void*)>("Qtitan::DockPanelManager::addDockPanel(QString const&, QSize const&, Qtitan::DockPanelArea, Qtitan::DockPanelBase*)");
+		// A build without the sized overload still gets a panel, at the library's
+		// own default size.
+		if (!fn || width <= 0 || height <= 0)
+			return add_panel(caption, area);
+		const QString title(caption);
+		const std::int32_t size[2]{width, height};
+		return static_cast<DockPanel*>(fn(this, title.data(), size, static_cast<int>(area), nullptr));
 	}
 
 	void DockManager::remove_panel(DockPanel* panel)

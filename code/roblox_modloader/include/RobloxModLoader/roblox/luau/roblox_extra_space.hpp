@@ -82,14 +82,20 @@ namespace RBX::Luau {
         std::byte padding_2[0x10];
 
     public:
-        WeakRef actor;
-        WeakRef capability_defining_instance;
+        // The instance that owns the thread: what the engine is handed when it
+        // starts a script, and what it writes here. Read off live threads on
+        // 0.739: Script, ModuleScript, LocalScript and CoreScript all land in
+        // this slot, and the nearest Actor ancestor lands in `actor` below.
+        WeakRef script;
+        WeakRef unknown_0x60;
 
     private:
         std::byte padding_3[0x8];
 
     public:
-        WeakRef script;
+        // Derived from `script` in the same call, and what the capability check
+        // consults.
+        WeakRef capability_defining_instance;
 
     private:
         std::byte padding_4[0x8];
@@ -97,18 +103,21 @@ namespace RBX::Luau {
     public:
         uint64_t capabilities;
 
+    public:
+        WeakRef actor;
+
     private:
-        std::byte padding_5[0x20];
+        std::byte padding_5[0x10];
     };
 
     RML_LAYOUT_DIAGNOSTIC_PUSH()
     RML_ASSERT_OFFSET(RobloxExtraSpace, shared, 0x18);
     RML_ASSERT_OFFSET(RobloxExtraSpace, capabilities_validator, 0x28);
     RML_ASSERT_OFFSET(RobloxExtraSpace, context, 0x30);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, actor, 0x50);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, capability_defining_instance, 0x60);
-    RML_ASSERT_OFFSET(RobloxExtraSpace, script, 0x78);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, script, 0x50);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, capability_defining_instance, 0x78);
     RML_ASSERT_OFFSET(RobloxExtraSpace, capabilities, 0x90);
+    RML_ASSERT_OFFSET(RobloxExtraSpace, actor, 0x98);
     RML_ASSERT_SIZE(RobloxExtraSpace, 0xB8);
     RML_LAYOUT_DIAGNOSTIC_POP()
 }

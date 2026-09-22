@@ -46,6 +46,11 @@ namespace rml::qt
 		[[nodiscard]] static DockManager* studio();
 
 		[[nodiscard]] DockPanel* add_panel(std::string_view caption, DockArea area);
+		/// The same panel with the size the docking library should give it when it
+		/// first lands: Qtitan sizes a new panel from this, so a panel that needs
+		/// to be wider than the default asks here instead of forcing a minimum
+		/// width on its content, which would stop the user shrinking it later.
+		[[nodiscard]] DockPanel* add_panel(std::string_view caption, int width, int height, DockArea area);
 		void remove_panel(DockPanel* panel);
 		void show_panel(DockPanel* panel, bool focus = true);
 	};
