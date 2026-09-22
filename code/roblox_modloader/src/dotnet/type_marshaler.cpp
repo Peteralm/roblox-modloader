@@ -134,20 +134,20 @@ namespace rml::dotnet
 		}
 
 		// A yield function that returns an unsupported type is called once per keystroke by an
-		// editor mod; the first report is the useful one, the rest are noise.
+		// editor mod; the first report is the useful one, the rest are noise. Types are registry
+		// singletons, so the address identifies one without allocating on the suppressed path.
 		void warn_unsupported_once(const RBX::Reflection::Type& type)
 		{
 			static std::mutex mutex;
-			static std::unordered_set<std::string> reported;
+			static std::unordered_set<const RBX::Reflection::Type*> reported;
 
-			std::string name = type.name.c_str();
 			{
 				const std::scoped_lock lock(mutex);
-				if (!reported.insert(name).second)
+				if (!reported.insert(&type).second)
 					return;
 			}
 
-			RML_WARN("Unsupported variant type '{}'", name);
+			RML_WARN("Unsupported variant type '{}'", type.name.c_str());
 		}
 	} // namespace
 
