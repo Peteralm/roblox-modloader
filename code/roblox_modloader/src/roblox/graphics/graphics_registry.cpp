@@ -8,6 +8,7 @@
 #include "RobloxModLoader/platform/memory/host_image.hpp"
 #include "RobloxModLoader/roblox/graphics/adorn_render.hpp"
 #include "RobloxModLoader/roblox/graphics/device.hpp"
+#include "RobloxModLoader/roblox/graphics/shader_manager.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -240,6 +241,20 @@ namespace rml::graphics
 	RBX::Graphics::SceneManager* scene_manager()
 	{
 		return GraphicsRegistry::instance().scene_manager();
+	}
+
+	RBX::Graphics::IShaderManager* shader_manager()
+	{
+		const auto engine = GraphicsRegistry::instance().visual_engine();
+		return engine ? engine->get_shader_manager() : nullptr;
+	}
+
+	std::shared_ptr<RBX::Graphics::ShaderProgram> engine_program(const std::string_view vertex, const std::string_view fragment)
+	{
+		auto* manager = shader_manager();
+		if (!manager)
+			return nullptr;
+		return manager->get_program(RBX::StringView(vertex), RBX::StringView(fragment));
 	}
 
 	void add_adorn_callback(AdornCallback callback)

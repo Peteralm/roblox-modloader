@@ -3,6 +3,8 @@
 #include "RobloxModLoader/rml_export.hpp"
 
 #include <functional>
+#include <memory>
+#include <string_view>
 
 namespace RBX
 {
@@ -14,6 +16,8 @@ namespace RBX::Graphics
 	class Device;
 	class DeviceContext;
 	class Framebuffer;
+	class IShaderManager;
+	class ShaderProgram;
 	class AdornRender;
 	class RenderCamera;
 	class SceneManager;
@@ -40,4 +44,6 @@ namespace rml::graphics
 	RML_EXPORT void add_render_callback(RenderCallback callback);
 	RML_EXPORT void add_adorn_callback(AdornCallback callback);
 	RML_EXPORT RBX::Graphics::AdornRender* adorn_render();
+	RML_EXPORT RBX::Graphics::IShaderManager* shader_manager();
+	RML_EXPORT std::shared_ptr<RBX::Graphics::ShaderProgram> engine_program(std::string_view vertex, std::string_view fragment);
 }
