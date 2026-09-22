@@ -2,8 +2,11 @@
 
 #include "RobloxModLoader/hooking/vtable_index.hpp"
 #include "RobloxModLoader/internal/common.hpp"
+#include "RobloxModLoader/memory/i_rtti_provider.hpp"
 #include "RobloxModLoader/memory/module.hpp"
+#include "RobloxModLoader/memory/string_anchor.hpp"
 #include "RobloxModLoader/platform/memory/host_image.hpp"
+#include "RobloxModLoader/roblox/graphics/adorn_render.hpp"
 #include "RobloxModLoader/roblox/graphics/device.hpp"
 
 #include <algorithm>
@@ -14,6 +17,7 @@ RML_LOG_SCOPE("Graphics");
 namespace rml::graphics
 {
 	static constexpr unsigned k_max_callback_failures = 2;
+	static constexpr std::size_t k_min_detour_target_size = 32;
 
 	static bool printable(const std::string& text)
 	{
@@ -100,6 +104,82 @@ namespace rml::graphics
 		}
 	}
 
+	void GraphicsRegistry::add_adorn_callback(AdornCallback callback)
+	{
+		std::lock_guard lock(m_callbacks_mutex);
+		m_adorn_callbacks.emplace_back(std::move(callback), 0u);
+	}
+
+	void GraphicsRegistry::run_adorn_callbacks(RBX::Graphics::AdornRender& adorn)
+	{
+		if (m_adorn_render.exchange(&adorn, std::memory_order_acq_rel) != &adorn)
+			RML_INFO("AdornRender captured at 0x{:X} ({}x{})",
+			    reinterpret_cast<std::uintptr_t>(&adorn),
+			    adorn.viewport_width,
+			    adorn.viewport_height);
+
+		std::lock_guard lock(m_callbacks_mutex);
+		for (auto it = m_adorn_callbacks.begin(); it != m_adorn_callbacks.end();)
+		{
+			try
+			{
+				it->first(adorn);
+				++it;
+				continue;
+			}
+			catch (const std::exception& e)
+			{
+				RML_ERROR("adorn callback threw: {}", e.what());
+			}
+			catch (...)
+			{
+				RML_ERROR("adorn callback threw an unknown exception");
+			}
+
+			if (++it->second >= k_max_callback_failures)
+			{
+				RML_ERROR("adorn callback removed after {} failures", it->second);
+				it = m_adorn_callbacks.erase(it);
+			}
+			else
+			{
+				++it;
+			}
+		}
+	}
+
+	RBX::Graphics::AdornRender* GraphicsRegistry::adorn_render() const
+	{
+		return m_adorn_render.load(std::memory_order_acquire);
+	}
+
+	void* adorn_render_pre_submit_pass_target()
+	{
+		if (!g_rtti_provider)
+			return nullptr;
+
+		const auto vtable = g_rtti_provider->find_class_vtable("RBX::Graphics::AdornRender");
+		if (!vtable)
+			return nullptr;
+
+		const auto slot = vtable_index_of(&RBX::Adorn::pre_submit_pass);
+		const memory::module image(platform::studio_image_name());
+		auto* target = (*vtable)[slot];
+		if (!image.contains(memory::handle(target)))
+		{
+			RML_ERROR("AdornRender vtable slot {} is not code", slot);
+			return nullptr;
+		}
+
+		const auto function = memory::function_containing(target);
+		if (!function || function->start != target || function->size < k_min_detour_target_size)
+		{
+			RML_ERROR("AdornRender vtable slot {} is too small to detour ({} bytes)", slot, function ? function->size : 0);
+			return nullptr;
+		}
+		return target;
+	}
+
 	bool GraphicsRegistry::validate()
 	{
 		if (const auto state = m_validation.load(std::memory_order_acquire); state != 0)
@@ -160,6 +240,16 @@ namespace rml::graphics
 	RBX::Graphics::SceneManager* scene_manager()
 	{
 		return GraphicsRegistry::instance().scene_manager();
+	}
+
+	void add_adorn_callback(AdornCallback callback)
+	{
+		GraphicsRegistry::instance().add_adorn_callback(std::move(callback));
+	}
+
+	RBX::Graphics::AdornRender* adorn_render()
+	{
+		return GraphicsRegistry::instance().adorn_render();
 	}
 
 	void add_render_callback(RenderCallback callback)

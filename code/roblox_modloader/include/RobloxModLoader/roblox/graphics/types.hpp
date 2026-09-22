@@ -158,7 +158,6 @@ namespace RBX::Graphics
 	RML_LAYOUT_DIAGNOSTIC_POP()
 
 	struct PassResolve;
-	struct GeometryBatch;
 	struct ConstantBuffer;
 	struct DeviceCaps;
 	struct DeviceStats;

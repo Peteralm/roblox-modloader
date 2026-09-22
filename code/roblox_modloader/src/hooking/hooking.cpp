@@ -1,10 +1,11 @@
 #include "RobloxModLoader/hooking/hooking.hpp"
-#include "RobloxModLoader/roblox/job_vtable.hpp"
 
 #include "RobloxModLoader/internal/common.hpp"
 #include "RobloxModLoader/internal/hooking/engine_hooks.hpp"
+#include "RobloxModLoader/roblox/job_vtable.hpp"
 #include "RobloxModLoader/roblox/task_scheduler.hpp"
 #include "pointers.hpp"
+#include "roblox/graphics/graphics_registry.hpp"
 
 #include <utility>
 
@@ -48,16 +49,23 @@ namespace rml
 #if RML_ENABLE_LUAU
 		DetourHookHelper::add<Hooks::luau_load>("LUAU_LOAD", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.luau_load));
 #endif
-		DetourHookHelper::add<Hooks::build_menu_bar_from_dom>("MENU_BUILD_FROM_DOM", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.build_menu_bar_from_dom));
+		DetourHookHelper::add<Hooks::build_menu_bar_from_dom>("MENU_BUILD_FROM_DOM",
+		    reinterpret_cast<void*>(g_pointers->m_roblox_pointers.build_menu_bar_from_dom));
 
 		if (g_pointers->m_roblox_pointers.creatable_get_creator)
-			DetourHookHelper::add<Hooks::creatable_get_creator>("CREATABLE_GET_CREATOR", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.creatable_get_creator));
+			DetourHookHelper::add<Hooks::creatable_get_creator>("CREATABLE_GET_CREATOR",
+			    reinterpret_cast<void*>(g_pointers->m_roblox_pointers.creatable_get_creator));
 
 		if (g_pointers->m_roblox_pointers.visual_engine_begin_render)
-			DetourHookHelper::add<Hooks::visual_engine_begin_render>("VISUAL_ENGINE_BEGIN_RENDER", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.visual_engine_begin_render));
+			DetourHookHelper::add<Hooks::visual_engine_begin_render>("VISUAL_ENGINE_BEGIN_RENDER",
+			    reinterpret_cast<void*>(g_pointers->m_roblox_pointers.visual_engine_begin_render));
 
 		if (g_pointers->m_roblox_pointers.scene_manager_render_scene)
-			DetourHookHelper::add<Hooks::scene_manager_render_scene>("SCENE_MANAGER_RENDER_SCENE", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.scene_manager_render_scene));
+			DetourHookHelper::add<Hooks::scene_manager_render_scene>("SCENE_MANAGER_RENDER_SCENE",
+			    reinterpret_cast<void*>(g_pointers->m_roblox_pointers.scene_manager_render_scene));
+
+		if (const auto pre_submit_pass = graphics::adorn_render_pre_submit_pass_target())
+			DetourHookHelper::add<Hooks::adorn_render_pre_submit_pass>("ADORN_RENDER_PRE_SUBMIT_PASS", pre_submit_pass);
 
 		g_hooking = this;
 	}

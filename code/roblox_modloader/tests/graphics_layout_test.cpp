@@ -1,4 +1,6 @@
 #include "RobloxModLoader/hooking/vtable_index.hpp"
+#include "RobloxModLoader/roblox/adorn.hpp"
+#include "RobloxModLoader/roblox/graphics/adorn_render.hpp"
 #include "RobloxModLoader/roblox/graphics/device.hpp"
 #include "RobloxModLoader/roblox/graphics/device_context.hpp"
 #include "RobloxModLoader/roblox/graphics/global_shader_data.hpp"
@@ -52,4 +54,30 @@ TEST_CASE("scene mirrors keep the measured layout")
 	static_assert(offsetof(SceneManager, main_render_targets) == 1624);
 	CHECK(static_cast<int>(ScenePhase::Render) == 2);
 	CHECK(static_cast<int>(PreRotate::Rotate270) == 3);
+}
+
+TEST_CASE("adorn interface keeps the dumped slot order")
+{
+	using namespace RBX;
+	static_assert(sizeof(Adorn) == 144);
+	static_assert(sizeof(Graphics::AdornRender) == 2744);
+	static_assert(sizeof(Graphics::GeometryBatch) == 40);
+	static_assert(Adorn::Material_Count == 13);
+	static_assert(Adorn::Pass_Count == 7);
+
+#if !defined(_MSC_VER)
+	const Color4* color = nullptr;
+	const CoordinateFrame* cframe = nullptr;
+	const Vector3* vector = nullptr;
+	CHECK(rml::vtable_index_of(&Adorn::get_camera) == 0);
+	CHECK(rml::vtable_index_of(&Adorn::prepare_render_pass) == 12);
+	CHECK(rml::vtable_index_of(&Adorn::pre_submit_pass) == 14);
+	CHECK(rml::vtable_index_of(&Adorn::post_submit_pass) == 15);
+	CHECK(rml::vtable_index_of(&Adorn::get_viewport) == 19);
+	CHECK(rml::vtable_index_of(&Adorn::line3d, *vector, *vector, *color, 0, false) == 27);
+	CHECK(rml::vtable_index_of(&Adorn::set_object_to_world_matrix, *cframe) == 30);
+	CHECK(rml::vtable_index_of(&Adorn::explosion, *static_cast<const Sphere*>(nullptr)) == 36);
+	CHECK(rml::vtable_index_of(&Adorn::ray, *static_cast<const Ray*>(nullptr), *color) == 43);
+	CHECK(rml::vtable_index_of(&Adorn::draw_font2d_impl, nullptr, nullptr) == 55);
+#endif
 }

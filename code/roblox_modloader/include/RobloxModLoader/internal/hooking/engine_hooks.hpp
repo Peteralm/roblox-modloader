@@ -15,6 +15,7 @@ namespace RBX
 
 	namespace Graphics
 	{
+		class AdornRender;
 		class DeviceContext;
 		class Framebuffer;
 		class VisualEngine;
@@ -39,6 +40,7 @@ namespace rml
 		static void global_init();
 		static const RBX::ICreator* creatable_get_creator(const RBX::Name* name);
 		static RBX::Graphics::DeviceContext* visual_engine_begin_render(RBX::Graphics::VisualEngine* self);
+		static void adorn_render_pre_submit_pass(RBX::Graphics::AdornRender* self);
 		static void scene_manager_render_scene(void* self, RBX::Graphics::DeviceContext* context, RBX::Graphics::Framebuffer* target, const void* camera, RBX::ArrayView<RBX::Graphics::Framebuffer*> extra, std::uint32_t capture_mode);
 	};
 }
