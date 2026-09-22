@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <optional>
 #include <string>
 
 namespace rml::memory
@@ -96,6 +97,40 @@ namespace rml::memory
 		return references;
 	}
 
+	static std::optional<AnchoredFunction> containing_function(const ImageLayout& layout, const std::uintptr_t address)
+	{
+		if (address < layout.text_begin || address >= layout.text_end)
+			return std::nullopt;
+
+		const auto rva = static_cast<std::uint32_t>(address - layout.base);
+		const auto* entry = std::upper_bound(layout.functions, layout.functions + layout.function_count, rva, [](const std::uint32_t value, const IMAGE_RUNTIME_FUNCTION_ENTRY& e) {
+			return value < e.BeginAddress;
+		});
+		if (entry == layout.functions)
+			return std::nullopt;
+		--entry;
+		if (rva >= entry->EndAddress)
+			return std::nullopt;
+
+		return AnchoredFunction{reinterpret_cast<void*>(layout.base + entry->BeginAddress), entry->EndAddress - entry->BeginAddress};
+	}
+
+	static std::vector<AnchoredFunction> unique_functions(const ImageLayout& layout, const std::vector<std::uintptr_t>& addresses)
+	{
+		std::vector<AnchoredFunction> result;
+		for (const auto address : addresses)
+		{
+			const auto function = containing_function(layout, address);
+			if (!function)
+				continue;
+			if (std::none_of(result.begin(), result.end(), [&](const AnchoredFunction& f) {
+				    return f.start == function->start;
+			    }))
+				result.push_back(*function);
+		}
+		return result;
+	}
+
 	std::vector<AnchoredFunction> functions_referencing_string(const std::string_view exact_text)
 	{
 		const auto& layout = image_layout();
@@ -106,23 +141,39 @@ namespace rml::memory
 		if (strings.empty())
 			return {};
 
-		std::vector<AnchoredFunction> result;
-		for (const auto reference : code_references(layout, strings))
+		return unique_functions(layout, code_references(layout, strings));
+	}
+
+	std::vector<AnchoredFunction> functions_calling(const void* target)
+	{
+		const auto& layout = image_layout();
+		if (!layout.functions || !layout.text_begin)
+			return {};
+
+		const auto wanted = reinterpret_cast<std::uintptr_t>(target);
+		const auto* code = reinterpret_cast<const std::uint8_t*>(layout.text_begin);
+		const std::size_t count = layout.text_end - layout.text_begin;
+
+		std::vector<std::uintptr_t> sites;
+		for (std::size_t i = 0; i + 5 <= count; ++i)
 		{
-			const auto rva = static_cast<std::uint32_t>(reference - layout.base);
-			const auto* entry = std::upper_bound(layout.functions, layout.functions + layout.function_count, rva,
-			    [](const std::uint32_t value, const IMAGE_RUNTIME_FUNCTION_ENTRY& e) { return value < e.BeginAddress; });
-			if (entry == layout.functions)
-				continue;
-			--entry;
-			if (rva >= entry->EndAddress)
+			if (code[i] != 0xE8 && code[i] != 0xE9)
 				continue;
 
-			AnchoredFunction function{reinterpret_cast<void*>(layout.base + entry->BeginAddress), entry->EndAddress - entry->BeginAddress};
-			if (std::none_of(result.begin(), result.end(), [&](const AnchoredFunction& f) { return f.start == function.start; }))
-				result.push_back(function);
+			std::int32_t displacement;
+			std::memcpy(&displacement, code + i + 1, sizeof(displacement));
+			if (layout.text_begin + i + 5 + displacement == wanted)
+				sites.push_back(layout.text_begin + i);
 		}
 
-		return result;
+		return unique_functions(layout, sites);
+	}
+
+	std::optional<AnchoredFunction> function_containing(const void* address)
+	{
+		const auto& layout = image_layout();
+		if (!layout.functions || !layout.text_begin)
+			return std::nullopt;
+		return containing_function(layout, reinterpret_cast<std::uintptr_t>(address));
 	}
 }
