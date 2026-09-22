@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 
@@ -82,6 +82,12 @@ internal static class ModLoader
                     RuntimeLog.Error($"Error while calling OnLoad for mod at {path}: {e}");
                 }
             }
+        }
+        catch (BadImageFormatException)
+        {
+            // A mod folder also carries its native dependencies; they are not assemblies and the
+            // loader has no way of telling before trying.
+            RuntimeLog.Debug($"Skipping {path}: not a managed assembly.");
         }
         catch (Exception e)
         {
