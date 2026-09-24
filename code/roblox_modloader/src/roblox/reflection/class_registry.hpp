@@ -84,6 +84,8 @@ namespace rml::reflection
 		RegisteredClass& m_entry;
 	};
 
+	/// Where every Instance keeps its ClassDescriptor pointer; construct_mod_instance overwrites it.
+	inline constexpr std::size_t k_descriptor_field_offset = 0x18;
 	inline constexpr std::size_t k_vtable_prefix_slots = 2;
 	inline constexpr std::size_t k_cloned_vtable_slots = 160;
 	using ClonedVtable = std::array<void*, k_vtable_prefix_slots + k_cloned_vtable_slots>;

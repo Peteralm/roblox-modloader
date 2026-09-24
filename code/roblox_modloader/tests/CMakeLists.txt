@@ -27,10 +27,13 @@ target_sources(rml_unit_tests PRIVATE
         "${ROBLOX_MODLOADER_SOURCE_DIR}/mod/mod_catalog.cpp"
         "${ROBLOX_MODLOADER_SOURCE_DIR}/mod/mod_kind.cpp"
         "${ROBLOX_MODLOADER_SOURCE_DIR}/luau/load_observer.cpp"
+        "${ROBLOX_MODLOADER_SOURCE_DIR}/memory/range.cpp"
 )
 
 if (WIN32)
     target_compile_definitions(rml_unit_tests PRIVATE ROBLOX_MODLOADER_STATIC_DEFINE)
+    target_sources(rml_unit_tests PRIVATE "${ROBLOX_MODLOADER_SOURCE_DIR}/platform/windows/memory/function_body.cpp")
+    target_link_libraries(rml_unit_tests PRIVATE Zydis)
 endif ()
 
 setup_compiler_flags(rml_unit_tests)

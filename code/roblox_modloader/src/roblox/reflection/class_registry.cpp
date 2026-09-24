@@ -12,6 +12,10 @@
 #include "app/init_gate.hpp"
 #include "pointers.hpp"
 
+#if defined(RML_WINDOWS)
+	#include "memory/reflection_anchors.hpp"
+#endif
+
 #include <cstring>
 
 RML_LOG_SCOPE("ClassRegistry");
@@ -21,7 +25,6 @@ namespace rml::reflection
 	static constexpr std::size_t k_class_descriptor_storage = 1024;
 	static constexpr std::uint32_t k_protection_none = 0;
 	static constexpr std::uint16_t k_functionality_persistent_local = 0x1 | 0x8 | 0x10;
-	static constexpr std::size_t k_descriptor_field_offset = 0x18;
 	static constexpr std::int32_t k_force_construction_tag = 6138;
 
 	struct ClassAttributes
@@ -107,6 +110,12 @@ namespace rml::reflection
 	{
 		if (!g_pointers)
 			return false;
+
+#if defined(RML_WINDOWS)
+		// The fork resolves these through RTTI instead of byte signatures; see reflection_anchors.cpp.
+		if (!resolve_engine_anchors())
+			return false;
+#endif
 
 		const auto& p = g_pointers->m_roblox_pointers;
 		return p.class_descriptor_ctor && p.class_descriptor_all_classes && (p.creatable_get_creator || p.creatable_register_creator) && p.instance_ctor && p.create_instance_impl;
