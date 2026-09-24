@@ -30,16 +30,9 @@ class HashTable;
 struct RobloxPointers
 {
 	void* m_rbx_crash;
-	void* m_render_prepare;
-	void* m_render_perform;
-	void* m_render_pass_2d;
-	void* m_render_pass_3d;
 	functions::print print;
 
 	void* m_profile_log;
-
-	// Scene Manager Render View
-	void* m_render_view;
 
 	functions::get_scheduler get_scheduler;
 
@@ -164,6 +157,8 @@ struct RobloxPointers
 	functions::property_descriptor_ctor property_descriptor_ctor;
 	functions::function_descriptor_ctor function_descriptor_ctor;
 	functions::event_descriptor_ctor event_descriptor_ctor;
+	functions::visual_engine_begin_render visual_engine_begin_render;
+	functions::scene_manager_render_scene scene_manager_render_scene;
 
 	const std::vector<const RBX::Reflection::Type*>* type_registry;
 };

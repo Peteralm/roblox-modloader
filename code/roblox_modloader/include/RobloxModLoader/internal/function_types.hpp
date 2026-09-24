@@ -21,6 +21,13 @@ namespace RBX::Signals
 	struct Signal;
 }
 
+namespace RBX::Graphics
+{
+	class DeviceContext;
+	class Framebuffer;
+	class VisualEngine;
+}
+
 namespace RBX
 {
 	class Name;
@@ -72,6 +79,8 @@ namespace functions
 	using property_descriptor_ctor = void (*)(void* self, void* class_descriptor, const void* type, const char* name, const char* category, const void* attributes, std::uint32_t protection_get, std::uint32_t protection_set, bool a9);
 	using function_descriptor_ctor = void (*)(void* self, void* class_descriptor, const char* name, std::uint32_t protection, std::uint64_t attributes_lo, std::uint64_t attributes_hi);
 	using event_descriptor_ctor = void (*)(void* self, void* class_descriptor, const char* name, std::uint32_t protection, const void* attributes);
+	using visual_engine_begin_render = RBX::Graphics::DeviceContext* (*)(RBX::Graphics::VisualEngine* self);
+	using scene_manager_render_scene = void (*)(void* self, RBX::Graphics::DeviceContext* context, RBX::Graphics::Framebuffer* target, const void* camera, RBX::ArrayView<RBX::Graphics::Framebuffer*> extra, std::uint32_t capture_mode);
 
 	using lua_gettop = int(RML_ENGINE_CALL*)(lua_State* L);
 	using lua_settop = void(RML_ENGINE_CALL*)(lua_State* L, int idx);

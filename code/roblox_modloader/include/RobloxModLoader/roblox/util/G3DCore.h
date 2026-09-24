@@ -1,36 +1,44 @@
 #ifndef _70F7A2EE1B6E4dd0AF07E4BFA609A3D1
 #define _70F7A2EE1B6E4dd0AF07E4BFA609A3D1
 
-#include "g3d/Vector2.h"
-#include "g3d/Vector3.h"
-#include "g3d/Vector4.h"
-#include "g3d/Matrix3.h"
-#include "g3d/Matrix4.h"
-#include "g3d/Vector3int16.h"
-#include "g3d/Vector2int16.h"
-#include "g3d/Color4uint8.h"
-#include "g3d/Color3uint8.h"
-#include "g3d/CoordinateFrame.h"
-#include "g3d/Plane.h"
-#include "g3d/Line.h"
-#include "g3d/LineSegment.h"
+#if defined(__clang__)
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 #include "g3d/AABox.h"
 #include "g3d/Box.h"
-#include "rbxg3d/RbxCamera.h"
 #include "g3d/Color3.h"
+#include "g3d/Color3uint8.h"
 #include "g3d/Color4.h"
-#include "g3d/g3dmath.h"
+#include "g3d/Color4uint8.h"
+#include "g3d/CoordinateFrame.h"
+#include "g3d/Line.h"
+#include "g3d/LineSegment.h"
+#include "g3d/Matrix3.h"
+#include "g3d/Matrix4.h"
+#include "g3d/Plane.h"
 #include "g3d/Rect2D.h"
 #include "g3d/Sphere.h"
-
+#include "g3d/Vector2.h"
+#include "g3d/Vector2int16.h"
+#include "g3d/Vector3.h"
+#include "g3d/Vector3int16.h"
+#include "g3d/Vector4.h"
+#include "g3d/debug.h"
+#include "g3d/g3dmath.h"
 #include "g3d/vectorMath.h"
-#include "g3d/Debug.h"
+#include "rbxg3d/RbxCamera.h"
+
+#if defined(__clang__)
+	#pragma clang diagnostic pop
+#endif
 
 // TODO: this can cause namespace collisions:
 //using G3D::Array;
 
-namespace RBX {
+namespace RBX
+{
 	typedef G3D::Vector2 Vector2;
 	typedef G3D::Vector3 Vector3;
 	typedef G3D::Vector4 Vector4;
@@ -52,17 +60,19 @@ namespace RBX {
 	typedef G3D::AABox AABox;
 	typedef G3D::Sphere Sphere;
 
-	enum IntersectResult {
+	enum IntersectResult
+	{
 		irNone = 0,
 		irPartial = 1,
 		irFull = 2
 	};
 }
 
-namespace G3D {
-	std::size_t hash_value(const G3D::Vector3 &v);
+namespace G3D
+{
+	std::size_t hash_value(const G3D::Vector3& v);
 
-	std::size_t hash_value(const G3D::Vector3int16 &v);
+	std::size_t hash_value(const G3D::Vector3int16& v);
 }
 
 #endif

@@ -4,9 +4,9 @@
 #include "RobloxModLoader/memory/module.hpp"
 #include "RobloxModLoader/platform/memory/host_image.hpp"
 
-#include <mach-o/loader.h>
-
 #include <algorithm>
+#include <mach-o/loader.h>
+#include <optional>
 #include <string>
 
 namespace rml::memory
@@ -165,6 +165,36 @@ namespace rml::memory
 		return references;
 	}
 
+	static std::optional<AnchoredFunction> containing_function(const ImageLayout& layout, const std::uintptr_t address)
+	{
+		if (address < layout.text_begin || address >= layout.text_end)
+			return std::nullopt;
+
+		const auto it = std::upper_bound(layout.function_starts.begin(), layout.function_starts.end(), address);
+		if (it == layout.function_starts.begin())
+			return std::nullopt;
+
+		const auto start = *(it - 1);
+		const auto end = it == layout.function_starts.end() ? layout.text_end : *it;
+		return AnchoredFunction{reinterpret_cast<void*>(start), end - start};
+	}
+
+	static std::vector<AnchoredFunction> unique_functions(const ImageLayout& layout, const std::vector<std::uintptr_t>& addresses)
+	{
+		std::vector<AnchoredFunction> result;
+		for (const auto address : addresses)
+		{
+			const auto function = containing_function(layout, address);
+			if (!function)
+				continue;
+			if (std::none_of(result.begin(), result.end(), [&](const AnchoredFunction& f) {
+				    return f.start == function->start;
+			    }))
+				result.push_back(*function);
+		}
+		return result;
+	}
+
 	std::vector<AnchoredFunction> functions_referencing_string(const std::string_view exact_text)
 	{
 		const auto& layout = image_layout();
@@ -175,20 +205,43 @@ namespace rml::memory
 		if (strings.empty())
 			return {};
 
-		std::vector<AnchoredFunction> result;
-		for (const auto reference : code_references(layout, strings))
+		return unique_functions(layout, code_references(layout, strings));
+	}
+
+	std::vector<AnchoredFunction> functions_calling(const void* target)
+	{
+		const auto& layout = image_layout();
+		if (layout.function_starts.empty() || !layout.text_begin)
+			return {};
+
+		const auto wanted = reinterpret_cast<std::uintptr_t>(target);
+		const auto* code = reinterpret_cast<const std::uint32_t*>(layout.text_begin);
+		const std::size_t count = (layout.text_end - layout.text_begin) / 4;
+
+		std::vector<std::uintptr_t> sites;
+		for (std::size_t i = 0; i < count; ++i)
 		{
-			const auto it = std::upper_bound(layout.function_starts.begin(), layout.function_starts.end(), reference);
-			if (it == layout.function_starts.begin())
+			const auto instruction = code[i];
+			if ((instruction & 0x7C000000) != 0x14000000)
 				continue;
 
-			const auto start = *(it - 1);
-			const auto end = it == layout.function_starts.end() ? layout.text_end : *it;
-			AnchoredFunction function{reinterpret_cast<void*>(start), end - start};
-			if (std::none_of(result.begin(), result.end(), [&](const AnchoredFunction& f) { return f.start == function.start; }))
-				result.push_back(function);
+			std::int64_t imm = instruction & 0x03FFFFFF;
+			if (imm & 0x02000000)
+				imm -= 0x04000000;
+
+			const auto pc = layout.text_begin + i * 4;
+			if (pc + imm * 4 == wanted)
+				sites.push_back(pc);
 		}
 
-		return result;
+		return unique_functions(layout, sites);
+	}
+
+	std::optional<AnchoredFunction> function_containing(const void* address)
+	{
+		const auto& layout = image_layout();
+		if (layout.function_starts.empty() || !layout.text_begin)
+			return std::nullopt;
+		return containing_function(layout, reinterpret_cast<std::uintptr_t>(address));
 	}
 }

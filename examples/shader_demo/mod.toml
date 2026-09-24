@@ -1,0 +1,4 @@
+name = "Shader Demo"
+version = "0.1.0"
+author = "RML"
+description = "Draws through the engine's RBXG3D device."
