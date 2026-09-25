@@ -113,7 +113,9 @@ namespace rml::graphics
 
 	void GraphicsRegistry::run_adorn_callbacks(RBX::Graphics::AdornRender& adorn)
 	{
-		if (m_adorn_render.exchange(&adorn, std::memory_order_acq_rel) != &adorn)
+		// Studio runs one adorn pass per view, each with its own AdornRender, so the pointer
+		// alternates every frame; announce only the first capture.
+		if (m_adorn_render.exchange(&adorn, std::memory_order_acq_rel) == nullptr)
 			RML_INFO("AdornRender captured at 0x{:X} ({}x{})",
 			    reinterpret_cast<std::uintptr_t>(&adorn),
 			    adorn.viewport_width,
