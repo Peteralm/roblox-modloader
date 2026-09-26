@@ -46,6 +46,11 @@
       // Roblox stores sources with '\n'; a CRLF model would ship a stray '\r' per line to the engine.
       model.setEOL(monaco.editor.EndOfLineSequence.LF);
 
+      // Standalone Monaco opens the command palette only on F1; VS Code users reach for Ctrl+Shift+P.
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP, function () {
+        editor.trigger('keyboard', 'editor.action.quickCommand', null);
+      });
+
       let applyingRemoteText = false;
       // Edits the engine has not confirmed yet. A full-text push that arrives while any is
       // outstanding was produced before those keystrokes and would roll the editor back.
