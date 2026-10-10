@@ -29,7 +29,7 @@
     })();
   </script>
 
-  <script src="./lsp-client.js?v=1"></script>
+  <script src="./lsp-client.js?v=2"></script>
   <script src="./monaco/vs/loader.js"></script>
   <script>
     require.config({ paths: { vs: './monaco/vs' } });
@@ -76,6 +76,38 @@
         RMLHost.send({ type: 'editor.resync', sent: editsSent });
       }
 
+      // True once the document's text is in the model. The host keeps this page invisible until
+      // then, so nobody ever looks at an editor that has not received its script yet.
+      let synced = false;
+
+      // Set if this page was ever on screen before it had its text, which is the empty flash the
+      // host is meant to prevent. A regression check reads it; the page itself does nothing with it.
+      let shownBeforeText = document.visibilityState === 'visible';
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible' && !synced) shownBeforeText = true;
+      });
+
+      // True while the document is being handed back to Studio's own editor: the text sent as
+      // editor.final is what the engine is asked to hold, so nothing may change it afterwards.
+      let frozen = false;
+
+      // The first text is the document itself, not an edit: it goes in whole, and it must not be
+      // something Ctrl+Z can take back to an empty buffer.
+      function applyInitialText(text) {
+        applyingRemoteText = true;
+        try {
+          model.setValue(typeof text === 'string' ? text : '');
+          model.setEOL(monaco.editor.EndOfLineSequence.LF);
+        } finally {
+          applyingRemoteText = false;
+        }
+
+        if (!synced) {
+          synced = true;
+          RMLHost.send({ type: 'editor.synced' });
+        }
+      }
+
       function applyRemoteText(text, sent) {
         if (typeof text !== 'string') return;
         if (unacknowledgedEdits > 0 || (typeof sent === 'number' && sent !== editsSent)) {
@@ -107,17 +139,34 @@
         }
       }
 
+      // The document as it was before the change being reported. A change's range is expressed
+      // against that text, and the engine counts a column in UTF-8 bytes where Monaco counts
+      // UTF-16 units, so turning one into the other needs the line as it was: with "não" on the
+      // line, every edit after the "ã" landed one byte early and the two buffers drifted apart.
+      let linesBefore = model.getLinesContent();
+      const utf8 = new TextEncoder();
+
+      function engineColumn(lineNumber, column) {
+        const line = linesBefore[lineNumber - 1] || '';
+        return utf8.encode(line.slice(0, column - 1)).length + 1;
+      }
+
       model.onDidChangeContent(function (event) {
-        if (applyingRemoteText) return;
+        if (applyingRemoteText) {
+          linesBefore = model.getLinesContent();
+          return;
+        }
+
         const edits = event.changes.map(function (change) {
           return {
             startLine: change.range.startLineNumber,
-            startCharacter: change.range.startColumn,
+            startCharacter: engineColumn(change.range.startLineNumber, change.range.startColumn),
             endLine: change.range.endLineNumber,
-            endCharacter: change.range.endColumn,
+            endCharacter: engineColumn(change.range.endLineNumber, change.range.endColumn),
             text: change.text
           };
         });
+        linesBefore = model.getLinesContent();
         if (edits.length > 0) {
           unacknowledgedEdits += edits.length;
           editsSent += edits.length;
@@ -126,13 +175,23 @@
       });
 
       const lsp = window.RMLLsp.start(monaco, editor, {
+        // The host opens this page with the path the engine agent gave the script; the language
+        // server finds the script in the place's tree by that path, which is what types `script`.
+        uri: new URLSearchParams(window.location.search).get('uri'),
         sendToServer: function (jsonrpc) { RMLHost.send({ type: 'lsp.message', data: jsonrpc }); }
       });
 
       RMLHost.onMessage(function (msg) {
         if (!msg || !msg.type) return;
         if (msg.type === 'editor.setText') {
-          applyRemoteText(msg.text, msg.sent);
+          if (msg.initial) applyInitialText(msg.text); else applyRemoteText(msg.text, msg.sent);
+        } else if (msg.type === 'editor.freeze') {
+          frozen = true;
+          editor.updateOptions({ readOnly: true });
+          RMLHost.send({ type: 'editor.final', text: model.getValue() });
+        } else if (msg.type === 'editor.thaw') {
+          frozen = false;
+          editor.updateOptions({ readOnly: false });
         } else if (msg.type === 'editor.applied') {
           if (unacknowledgedEdits > 0) unacknowledgedEdits--;
           requestResync();
@@ -150,6 +209,11 @@
       window.__rmlModelText = function () { return model.getValue(); };
       window.__rmlPending = function () { return unacknowledgedEdits; };
       window.__rmlRemoteChanges = function () { return remoteChanges; };
+      window.__rmlSynced = function () { return synced; };
+      window.__rmlFrozen = function () { return frozen; };
+      window.__rmlShownBeforeText = function () { return shownBeforeText; };
+      // What the completion list would hold at the cursor, through the same request the list makes.
+      window.__rmlCompletions = function () { return lsp.complete(editor.getPosition()); };
 
       RMLHost.send({ type: 'editor.ready' });
     });

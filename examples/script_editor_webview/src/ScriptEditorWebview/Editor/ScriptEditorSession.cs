@@ -15,6 +15,12 @@ namespace ScriptEditorWebview.Editor;
 /// </summary>
 internal sealed class ScriptEditorSession : IDisposable
 {
+    /// <summary>
+    ///     Root of the workspace luau-lsp is told about. Nothing exists there: the documents live in
+    ///     the editor and the tree of the place comes from the engine agent.
+    /// </summary>
+    private const string WorkspaceRoot = "file:///rml";
+
     private readonly EngineAgent _agent;
     private readonly GuiDispatcher _gui;
     private readonly LuauLspBridge _lsp;
@@ -23,21 +29,25 @@ internal sealed class ScriptEditorSession : IDisposable
 
     private readonly WebViewHost _webView;
     private bool _disposed;
-    private bool _editorReady;
+    /// <summary>True once the page holds the document's text and is on screen.</summary>
+    private bool _editorSynced;
 
     private string _lastSyncedText = string.Empty;
     private volatile bool _lspReady;
     private string? _pendingText;
     private string? _sourcemap;
 
-    public ScriptEditorSession(GuiDispatcher gui, EngineAgent agent, int documentId, string name, string uri,
+    public ScriptEditorSession(GuiDispatcher gui, EngineAgent agent, int documentId, string name, string path,
         string text, IntPtr editorHwnd, ModContext context)
     {
         _gui = gui;
         _agent = agent;
         DocumentId = documentId;
         Name = name;
-        _uri = string.IsNullOrEmpty(uri) ? "file:///rml/main.luau" : uri;
+
+        // The agent gives every open script a path and puts the same one in the tree it sends to
+        // luau-lsp; a document opened under it is how the server learns what `script` is.
+        _uri = string.IsNullOrEmpty(path) ? $"{WorkspaceRoot}/main.luau" : $"{WorkspaceRoot}/{path}";
         _pendingText = text;
         EditorHwnd = editorHwnd;
         _webRoot = Path.Combine(context.AssemblyDirectory, "web");
@@ -63,7 +73,7 @@ internal sealed class ScriptEditorSession : IDisposable
 
         _webView.MessageReceived -= OnWebMessage;
         _lsp.ServerMessage -= OnLspServerMessage;
-        _lsp.Initialized -= OnLspInitialized;
+        _lsp.DocumentOpened -= OnLspDocumentOpened;
 
         _lsp.Dispose();
         _webView.Dispose();
@@ -74,12 +84,12 @@ internal sealed class ScriptEditorSession : IDisposable
         _webView.MessageReceived += OnWebMessage;
 
         _lsp.ServerMessage += OnLspServerMessage;
-        _lsp.Initialized += OnLspInitialized;
+        _lsp.DocumentOpened += OnLspDocumentOpened;
         _lsp.Start();
 
         Win32.EnsureClipChildren(EditorHwnd);
 
-        _webView.Initialize(EditorHwnd, _webRoot);
+        _webView.Initialize(EditorHwnd, _webRoot, $"index.html?uri={Uri.EscapeDataString(_uri)}");
     }
 
     public void SyncBounds()
@@ -92,7 +102,9 @@ internal sealed class ScriptEditorSession : IDisposable
     {
         if (_disposed) return;
 
-        if (!_editorReady)
+        // Until the page has taken its first text it reads the document from the engine itself,
+        // which is newer than anything a report still in flight can say.
+        if (!_editorSynced)
         {
             _pendingText = text;
             return;
@@ -129,7 +141,29 @@ internal sealed class ScriptEditorSession : IDisposable
         }
     }
 
-    private void OnLspInitialized()
+    /// <summary>
+    ///     Starts handing the document back to Studio's own editor: the page stops taking input and
+    ///     sends everything it holds, which the engine is then asked to match. Returns false when
+    ///     the page never got as far as showing the document, so there is nothing of its own to save
+    ///     and the session can simply go.
+    /// </summary>
+    public bool BeginHandover()
+    {
+        if (_disposed || !_editorSynced) return false;
+
+        _webView.PostMessage("{\"type\":\"editor.freeze\"}");
+        return true;
+    }
+
+    /// <summary>Gives the page back to the user after a handover that did not go through.</summary>
+    public void CancelHandover()
+    {
+        if (_disposed) return;
+
+        _webView.PostMessage("{\"type\":\"editor.thaw\"}");
+    }
+
+    private void OnLspDocumentOpened()
     {
         _lspReady = true;
         PushSourcemap(null);
@@ -150,17 +184,46 @@ internal sealed class ScriptEditorSession : IDisposable
         var type = message?["type"]?.GetValue<string>();
         switch (type)
         {
+            // The text the mod was handed when the document opened can be seconds old by now, and
+            // whoever was typing in Studio's editor meanwhile must not find those keystrokes gone,
+            // so the page's first text is read from the engine at this moment.
             case "editor.ready":
+                _agent.TextAsync(DocumentId).ContinueWith(task =>
+                {
+                    var current = task.IsFaulted ? null : task.Result;
+
+                    _gui.Post(() =>
+                    {
+                        if (_disposed) return;
+
+                        var text = current ?? _pendingText ?? string.Empty;
+                        _pendingText = null;
+                        PushTextToEditor(text, true, null, true);
+                    });
+                }, TaskContinuationOptions.ExecuteSynchronously);
+
+                break;
+
+            // The page holds the document: only now does it cover Studio's editor.
+            case "editor.synced":
                 _gui.Post(() =>
                 {
-                    _editorReady = true;
+                    if (_disposed || _editorSynced) return;
 
-                    if (_pendingText is { } text)
-                    {
-                        _pendingText = null;
-                        PushTextToEditor(text);
-                    }
+                    _editorSynced = true;
+                    _webView.Show();
+
+                    if (_pendingText is not { } newer) return;
+
+                    _pendingText = null;
+                    PushTextToEditor(newer);
                 });
+                break;
+
+            // The frozen page's last word: everything it holds, for the engine to match.
+            case "editor.final":
+                if (message?["text"]?.GetValue<string>() is { } final) _agent.Settle(DocumentId, final);
+
                 break;
 
             // The editor asks for the engine's own copy of the document; a regression check compares
@@ -213,7 +276,7 @@ internal sealed class ScriptEditorSession : IDisposable
         _webView.PostMessage(envelope);
     }
 
-    private void PushTextToEditor(string text, bool force = false, int? sent = null)
+    private void PushTextToEditor(string text, bool force = false, int? sent = null, bool initial = false)
     {
         if (!force && text == _lastSyncedText) return;
 
@@ -227,6 +290,7 @@ internal sealed class ScriptEditorSession : IDisposable
             ["remote"] = true
         };
         if (sent is { } count) envelope["sent"] = count;
+        if (initial) envelope["initial"] = true;
         _webView.PostMessage(envelope.ToJsonString());
     }
 }

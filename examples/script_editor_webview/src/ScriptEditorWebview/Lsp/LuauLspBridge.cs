@@ -45,7 +45,12 @@ internal sealed class LuauLspBridge(string lspExePath, string robloxTypesPath) :
 
     public event Action<string>? ServerMessage;
 
-    public event Action? Initialized;
+    /// <summary>
+    ///     Raised once the editor's document has been handed to the server. luau-lsp builds its
+    ///     workspace on the first document and answers a DataModel tree that arrives earlier with
+    ///     "unknown notification method: $/plugin/full", so this is the first moment a tree sticks.
+    /// </summary>
+    public event Action? DocumentOpened;
 
     public void Start()
     {
@@ -115,7 +120,7 @@ internal sealed class LuauLspBridge(string lspExePath, string robloxTypesPath) :
 
         WriteFrame(InjectRobloxSettings(jsonRpc));
 
-        if (IsMethod(jsonRpc, "initialized")) Initialized?.Invoke();
+        if (IsMethod(jsonRpc, "textDocument/didOpen")) DocumentOpened?.Invoke();
     }
 
     public void SendNotification(string method, string paramsJson)
@@ -214,10 +219,19 @@ internal sealed class LuauLspBridge(string lspExePath, string robloxTypesPath) :
         types["definitionFiles"] = definitionFiles;
         settings["types"] = types;
 
+        // On by default in luau-lsp, and it answers from the last full check of the document
+        // whenever the text around the cursor has not changed. Retype `Instance.new("Part")` as
+        // `Instance.new("Seat")` on the line above and the list below is still Part's. A full check
+        // per request costs more on a very long script and is never wrong about the class.
+        var completion = settings["completion"] as JsonObject ?? new JsonObject();
+        completion["enableFragmentAutocomplete"] = false;
+        settings["completion"] = completion;
+
         settings["luau-lsp.platform.type"] = "roblox";
         settings["luau-lsp.sourcemap.enabled"] = true;
         settings["luau-lsp.sourcemap.autogenerate"] = false;
         settings["luau-lsp.types.roblox"] = true;
+        settings["luau-lsp.completion.enableFragmentAutocomplete"] = false;
 
         return settings;
     }

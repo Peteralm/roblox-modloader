@@ -142,8 +142,7 @@
     }
 
     const sendToServer = options.sendToServer;
-    const rawUri = model && model.uri && model.uri.toString ? model.uri.toString() : '';
-    const uri = rawUri.startsWith('file:///') ? rawUri : 'file:///rml/main.luau';
+    const uri = typeof options.uri === 'string' && options.uri.startsWith('file:///') ? options.uri : 'file:///rml/main.luau';
 
     let nextId = 1;
     let initialized = false;
@@ -223,7 +222,12 @@
       }
 
       if (msg.method === 'textDocument/publishDiagnostics' && msg.params && msg.params.uri === uri) {
-        const markers = (msg.params.diagnostics || []).map(function (d) {
+        // The server looks for a required module on disk, and the place's modules are not there:
+        // they live in Studio. Every require would be underlined as unknown, so that one
+        // complaint is dropped; what the module returns stays untyped either way.
+        const markers = (msg.params.diagnostics || []).filter(function (d) {
+          return !(d.message || '').startsWith('TypeError: Unknown require');
+        }).map(function (d) {
           return Object.assign({}, toMonacoRange(d.range), {
             message: d.message || '',
             severity: severityToMonaco(monaco, d.severity),
@@ -242,45 +246,54 @@
       });
     });
 
+    // One request, one mapping: the completion list and window.__rmlCompletions both come through
+    // here, so what a regression check counts is what the list would show.
+    async function complete(position, context) {
+      if (!initialized) return [];
+
+      const triggerKind = context && context.triggerKind === monaco.languages.CompletionTriggerKind.TriggerCharacter ? 2 : 1;
+      const triggerCharacter = context && context.triggerCharacter ? context.triggerCharacter : undefined;
+      const result = await request('textDocument/completion', {
+        textDocument: { uri: uri },
+        position: fromMonacoPosition(position),
+        context: { triggerKind: triggerKind, triggerCharacter: triggerCharacter },
+      });
+
+      const items = Array.isArray(result) ? result : (result && result.items) ? result.items : [];
+      return items.map(function (item) {
+        let insertText = item.insertText || item.label;
+        let range;
+        if (item.textEdit && item.textEdit.newText) {
+          insertText = item.textEdit.newText;
+          if (item.textEdit.range) range = toMonacoRange(item.textEdit.range);
+        }
+
+        const isSnippet = item.insertTextFormat === 2;
+        // luau-lsp marks a deprecated member with the older boolean; Monaco strikes an item through
+        // only for the tag, so without this a deprecated method looked as current as any other.
+        const deprecated = item.deprecated === true || (Array.isArray(item.tags) && item.tags.indexOf(1) !== -1);
+        return {
+          label: item.label,
+          kind: lspCompletionKindToMonaco(monaco, item.kind),
+          tags: deprecated ? [monaco.languages.CompletionItemTag.Deprecated] : undefined,
+          insertText: insertText,
+          insertTextRules: isSnippet ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : monaco.languages.CompletionItemInsertTextRule.None,
+          range: range,
+          filterText: item.filterText,
+          sortText: item.sortText,
+          preselect: item.preselect,
+          detail: item.detail,
+          documentation: item.documentation && item.documentation.value ? item.documentation.value : item.documentation,
+        };
+      });
+    }
+
     function registerCompletion(langId) {
       monaco.languages.registerCompletionItemProvider(langId, {
         triggerCharacters: ['.', ':'],
         provideCompletionItems: async function (_model, position, context) {
-          if (!initialized) return { suggestions: [] };
           try {
-            const triggerKind = context && context.triggerKind === monaco.languages.CompletionTriggerKind.TriggerCharacter ? 2 : 1;
-            const triggerCharacter = context && context.triggerCharacter ? context.triggerCharacter : undefined;
-            const result = await request('textDocument/completion', {
-              textDocument: { uri: uri },
-              position: fromMonacoPosition(position),
-              context: { triggerKind: triggerKind, triggerCharacter: triggerCharacter },
-            });
-
-            const items = Array.isArray(result) ? result : (result && result.items) ? result.items : [];
-            const suggestions = items.map(function (item) {
-              let insertText = item.insertText || item.label;
-              let range;
-              if (item.textEdit && item.textEdit.newText) {
-                insertText = item.textEdit.newText;
-                if (item.textEdit.range) range = toMonacoRange(item.textEdit.range);
-              }
-
-              const isSnippet = item.insertTextFormat === 2;
-              return {
-                label: item.label,
-                kind: lspCompletionKindToMonaco(monaco, item.kind),
-                insertText: insertText,
-                insertTextRules: isSnippet ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : monaco.languages.CompletionItemInsertTextRule.None,
-                range: range,
-                filterText: item.filterText,
-                sortText: item.sortText,
-                preselect: item.preselect,
-                detail: item.detail,
-                documentation: item.documentation && item.documentation.value ? item.documentation.value : item.documentation,
-              };
-            });
-
-            return { suggestions: suggestions };
+            return { suggestions: await complete(position, context) };
           } catch (_) {
             return { suggestions: [] };
           }
@@ -314,7 +327,7 @@
 
     handshake();
 
-    return { onServerMessage: onServerMessage };
+    return { onServerMessage: onServerMessage, complete: complete };
   }
 
   window.RMLLsp = { start: start, version: LSP_CLIENT_VERSION };

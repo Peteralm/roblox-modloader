@@ -12,7 +12,9 @@ internal sealed class WebViewHost(GuiDispatcher gui) : IDisposable
     private CoreWebView2Controller? _controller;
     private Rectangle _lastBounds;
     private bool _disposed;
+    private string _page = "index.html";
     private IntPtr _parentHwnd;
+    private bool _shown;
     private string _webRootPath = string.Empty;
     private CoreWebView2? _webView;
 
@@ -52,10 +54,17 @@ internal sealed class WebViewHost(GuiDispatcher gui) : IDisposable
 
     public event Action? Ready;
 
-    public void Initialize(IntPtr parentHwnd, string webRootPath)
+    /// <summary>
+    ///     Creates the web view over <paramref name="parentHwnd" /> and loads <paramref name="page" />,
+    ///     a path under <paramref name="webRootPath" /> that may carry a query string. The view stays
+    ///     invisible until <see cref="Show" />: what is under it is a working editor, and covering it
+    ///     with a page that has no text yet is the empty flash this avoids.
+    /// </summary>
+    public void Initialize(IntPtr parentHwnd, string webRootPath, string page)
     {
         _parentHwnd = parentHwnd;
         _webRootPath = webRootPath;
+        _page = page;
         gui.Post(BeginInitialize);
     }
 
@@ -123,11 +132,11 @@ internal sealed class WebViewHost(GuiDispatcher gui) : IDisposable
 
         var bounds = ClientRect(_parentHwnd);
         controller.Bounds = bounds;
-        controller.IsVisible = true;
+        controller.IsVisible = _shown;
 
         Win32.RaiseChildWindows(_parentHwnd, "Chrome_WidgetWin");
 
-        _webView.Navigate($"https://{VirtualHost}/index.html");
+        _webView.Navigate($"https://{VirtualHost}/{_page}");
 
         IsReady = true;
         ScriptEditorWebviewMod.Logger.Info(
@@ -195,11 +204,19 @@ internal sealed class WebViewHost(GuiDispatcher gui) : IDisposable
         });
     }
 
-    public void SetVisible(bool visible)
+    /// <summary>Puts the page on screen. Called once the page holds the document's text.</summary>
+    public void Show()
     {
         if (_disposed) return;
 
-        gui.Post(() => { _controller?.IsVisible = visible; });
+        gui.Post(() =>
+        {
+            _shown = true;
+            if (_controller is null) return;
+
+            _controller.IsVisible = true;
+            Win32.RaiseChildWindows(_parentHwnd, "Chrome_WidgetWin");
+        });
     }
 
     private static Rectangle ClientRect(IntPtr hwnd)

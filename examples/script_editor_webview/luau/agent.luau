@@ -11,6 +11,7 @@
 
 local HttpService = game:GetService("HttpService")
 local ScriptEditorService = game:GetService("ScriptEditorService")
+local StudioService = game:GetService("StudioService")
 
 -- The walk is cooperative: it hands the engine a frame back every so many instances so a place with
 -- 100k parts cannot freeze the editor while the sourcemap is built.
@@ -25,6 +26,11 @@ agent._events = {}
 agent._nextId = 0
 agent._connections = {}
 agent._running = true
+
+-- Script instance -> the path luau-lsp knows it by, for the documents that are open. The language
+-- server ties a document to its place in the DataModel only through a file path, so every open
+-- script gets one made of its document id; nothing is ever written there.
+agent._pathByScript = {}
 
 agent._sourcemapJson = nil
 agent._sourcemapNodes = 0
@@ -81,15 +87,23 @@ function agent._track(document)
 	local entry = {
 		id = id,
 		document = document,
+		script = document:GetScript(),
 		name = name,
+		path = `scripts/{id}.luau`,
 		queue = {},
 		applied = 0,
 		pumping = false,
 		closed = false,
+		-- Set once the editor has handed this document back to Studio's own editor: the text it
+		-- sent last is the truth from then on, and an edit that arrives late must not land.
+		frozen = false,
+		-- Counts the hand-backs asked for, so one that was overtaken can tell and stand down.
+		settling = 0,
 	}
 
 	agent._documents[id] = entry
 	agent._idByDocument[document] = id
+	agent._pathByScript[entry.script] = entry.path
 
 	local uri = ""
 	local gotUri, value = pcall(function()
@@ -104,8 +118,12 @@ function agent._track(document)
 		id = id,
 		name = name,
 		uri = uri,
+		path = entry.path,
 		text = agent._textOf(document),
 	})
+
+	-- The tree luau-lsp holds has no path for this script yet, so it cannot say what `script` is.
+	agent._markSourcemapDirty()
 
 	return id
 end
@@ -120,6 +138,7 @@ function agent._untrack(document)
 	if entry then
 		entry.closed = true
 		entry.queue = {}
+		agent._pathByScript[entry.script] = nil
 	end
 
 	agent._documents[id] = nil
@@ -193,7 +212,7 @@ function agent.push(payload)
 	end
 
 	local entry = agent._documents[request.id]
-	if not entry or entry.closed then
+	if not entry or entry.closed or entry.frozen then
 		return false
 	end
 
@@ -224,6 +243,10 @@ function agent.resync()
 	local announced = 0
 
 	for id, entry in agent._documents do
+		-- Whoever asks for the documents again is about to edit them again.
+		entry.frozen = false
+		entry.settling += 1
+
 		local uri = ""
 		local gotUri, value = pcall(function()
 			return entry.document:GetInternalUri()
@@ -237,6 +260,7 @@ function agent.resync()
 			id = id,
 			name = entry.name,
 			uri = uri,
+			path = entry.path,
 			text = agent._textOf(entry.document),
 		})
 
@@ -265,6 +289,8 @@ function agent.poll()
 	local payload = {
 		events = events,
 		applied = applied,
+		active = agent._activeId(),
+		activeKnown = agent._activeKnown,
 	}
 
 	if agent._sourcemapJson then
@@ -274,6 +300,107 @@ function agent.poll()
 	end
 
 	return HttpService:JSONEncode(payload)
+end
+
+-- The document whose tab is in front, or 0 when none is. Only that document's editor window is
+-- visible, so it is the only one an overlay can be paired with by looking at windows.
+-- `_activeKnown` turns false when Studio refuses to say, and the 0 then means nothing.
+function agent._activeId()
+	local ok, script = pcall(function()
+		return StudioService.ActiveScript
+	end)
+
+	agent._activeKnown = ok
+
+	if not ok or not script then
+		return 0
+	end
+
+	for id, entry in agent._documents do
+		if entry.script == script then
+			return id
+		end
+	end
+
+	return 0
+end
+
+-- Hands one document back to Studio's own editor. The editor is frozen by the time it calls this
+-- and `text` is everything it holds; the document must hold exactly that before the overlay goes
+-- away. Writes still queued are let through first, and if the two still differ the whole document
+-- is rewritten once. The answer is a "settled" event, for the reason `check` answers with one.
+function agent.settle(payload)
+	local decoded, request = pcall(function()
+		return HttpService:JSONDecode(payload)
+	end)
+	if not decoded or type(request) ~= "table" or type(request.text) ~= "string" then
+		return false
+	end
+
+	local id = request.id
+	local entry = agent._documents[id]
+	if not entry or entry.closed then
+		-- A document that closed in the meantime took its text with it: nothing to hand over.
+		agent._emit({ kind = "settled", id = id, ok = true, length = 0, rewritten = false })
+		return true
+	end
+
+	entry.frozen = true
+	entry.settling += 1
+
+	local turn = entry.settling
+
+	task.spawn(function()
+		while agent._running and not entry.closed and (entry.pumping or #entry.queue > 0) do
+			task.wait()
+		end
+
+		if not agent._running or entry.closed then
+			agent._emit({ kind = "settled", id = id, ok = true, length = 0, rewritten = false })
+			return
+		end
+
+		-- The editor was given back to the user while this waited (`resync`), or it asked again:
+		-- the text this call was handed is no longer the editor's last word.
+		if entry.settling ~= turn then
+			return
+		end
+
+		local current = agent._textOf(entry.document)
+		local rewritten = false
+
+		if current ~= request.text then
+			rewritten = true
+
+			local lines = string.split(current, "\n")
+			local ok, err = pcall(function()
+				return entry.document:EditTextAsync(request.text, 1, 1, #lines, #lines[#lines] + 1)
+			end)
+
+			if not ok then
+				entry.frozen = false
+				agent._emit({ kind = "settled", id = id, ok = false, message = `rewriting the document failed: {err}` })
+				return
+			end
+
+			current = agent._textOf(entry.document)
+		end
+
+		if current ~= request.text then
+			entry.frozen = false
+			agent._emit({
+				kind = "settled",
+				id = id,
+				ok = false,
+				message = `the document holds {#current} bytes after the rewrite, the editor holds {#request.text}`,
+			})
+			return
+		end
+
+		agent._emit({ kind = "settled", id = id, ok = true, length = #current, rewritten = rewritten })
+	end)
+
+	return true
 end
 
 -- The overlay only goes up once a real write has been proven on this Studio build: a no-op edit at
@@ -330,21 +457,39 @@ function agent.text(id)
 	return agent._textOf(entry.document)
 end
 
--- Opens a scratch script so an automated check has a document to type into without a human
--- clicking one open. Only ever called when the mod is started with RML_MONACO_SELFTEST set.
+-- Opens two scratch scripts so an automated check has documents to type into without a human
+-- clicking them open: a worker inside an Actor, which lets the check ask what `script.Parent` is,
+-- and a plain server script, opened last so its tab is the one in front. Only ever called when the
+-- mod is started with RML_MONACO_SELFTEST set, and it does nothing the second time: the agent is
+-- started again after every switch back from Studio's editor, in the same place.
 function agent.openScratch()
+	if game:GetService("ServerScriptService"):FindFirstChild("RmlMonacoSelfTest") then
+		return false
+	end
+
 	task.spawn(function()
+		local actor = Instance.new("Actor")
+		actor.Name = "RmlMonacoSelfTestActor"
+		actor.Parent = workspace
+
+		local worker = Instance.new("Script")
+		worker.Name = "RmlMonacoSelfTestWorker"
+		worker.Source = "-- rml monaco self test worker\n"
+		worker.Parent = actor
+
 		local script = Instance.new("Script")
 		script.Name = "RmlMonacoSelfTest"
 		script.Source = "-- rml monaco self test\n"
 		script.Parent = game:GetService("ServerScriptService")
 
-		local ok, err = pcall(function()
-			return ScriptEditorService:OpenScriptDocumentAsync(script)
-		end)
+		for _, target in { worker, script } do
+			local ok, err = pcall(function()
+				return ScriptEditorService:OpenScriptDocumentAsync(target)
+			end)
 
-		if not ok then
-			agent._emit({ kind = "error", message = `opening the scratch document failed: {err}` })
+			if not ok then
+				agent._emit({ kind = "error", message = `opening the scratch document failed: {err}` })
+			end
 		end
 	end)
 
@@ -382,6 +527,11 @@ function agent._walkSourcemap()
 				Name = name,
 				ClassName = className,
 			}
+
+			local path = agent._pathByScript[instance]
+			if path then
+				mapped.FilePaths = { path }
+			end
 
 			local children = {}
 
@@ -438,6 +588,7 @@ function agent.stop()
 	agent._connections = {}
 	agent._documents = {}
 	agent._idByDocument = {}
+	agent._pathByScript = {}
 	agent._events = {}
 end
 

@@ -20,6 +20,7 @@ internal sealed class EngineAgent : IDisposable
     private LuauRef? _poll;
     private LuauRef? _push;
     private LuauRef? _resync;
+    private LuauRef? _settle;
     private LuauRef? _text;
     private LuauRef? _check;
     private LuauRef? _openScratch;
@@ -54,6 +55,7 @@ internal sealed class EngineAgent : IDisposable
         _text?.Dispose();
         _openScratch?.Dispose();
         _resync?.Dispose();
+        _settle?.Dispose();
         stop?.Dispose();
         _table?.Dispose();
 
@@ -63,6 +65,7 @@ internal sealed class EngineAgent : IDisposable
         _text = null;
         _openScratch = null;
         _resync = null;
+        _settle = null;
         _table = null;
     }
 
@@ -107,13 +110,14 @@ internal sealed class EngineAgent : IDisposable
         var text = (await table.IndexAsync("text")).AsRef();
         var openScratch = (await table.IndexAsync("openScratch")).AsRef();
         var resync = (await table.IndexAsync("resync")).AsRef();
+        var settle = (await table.IndexAsync("settle")).AsRef();
         var stop = (await table.IndexAsync("stop")).AsRef();
 
         if (push is null || poll is null || check is null || text is null || openScratch is null ||
-            resync is null || stop is null)
+            resync is null || settle is null || stop is null)
         {
             table.Dispose();
-            return "the agent table is missing one of push/poll/check/text/openScratch/resync/stop";
+            return "the agent table is missing one of push/poll/check/text/openScratch/resync/settle/stop";
         }
 
         _table = table;
@@ -123,6 +127,7 @@ internal sealed class EngineAgent : IDisposable
         _text = text;
         _openScratch = openScratch;
         _resync = resync;
+        _settle = settle;
         _stop = stop;
 
         return null;
@@ -167,6 +172,34 @@ internal sealed class EngineAgent : IDisposable
         catch (Exception ex)
         {
             ScriptEditorWebviewMod.Logger.Error($"queueing an editor edit failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     Asks the engine to make one document hold exactly <paramref name="text" />, the editor's
+    ///     final buffer, before its overlay goes away. The answer is a "settled" event on a later
+    ///     poll, for the reason <see cref="RequestCheck" /> answers with one.
+    /// </summary>
+    public void Settle(int documentId, string text)
+    {
+        if (_settle is null) return;
+
+        var payload = new JsonObject
+        {
+            ["id"] = documentId,
+            ["text"] = text
+        }.ToJsonString();
+
+        try
+        {
+            _settle.InvokeAsync(payload).ContinueWith(
+                task => ScriptEditorWebviewMod.Logger.Error(
+                    $"handing a document back to Studio's editor failed: {task.Exception?.GetBaseException().Message}"),
+                TaskContinuationOptions.OnlyOnFaulted);
+        }
+        catch (Exception ex)
+        {
+            ScriptEditorWebviewMod.Logger.Error($"handing a document back to Studio's editor failed: {ex.Message}");
         }
     }
 
