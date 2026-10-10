@@ -40,6 +40,7 @@ public sealed class DiscordRpc : ModBase, IDataModelAware
     {
         _presence = new DiscordPresenceService();
         _presence.SetIdle();
+        Logger.Info("Discord RPC mod loaded; waiting for the Discord client.");
         return 0;
     }
 

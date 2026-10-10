@@ -5,11 +5,12 @@
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <EnableDynamicLoading>true</EnableDynamicLoading>
     </PropertyGroup>
     <ItemGroup>
-        <ProjectReference Include="..\..\..\..\code\dotnet\Roblox\src\Roblox\Roblox.csproj" />
-        <ProjectReference Include="..\..\..\..\code\dotnet\Runtime\src\RML.Core\RML.Core.csproj" />
-        <ProjectReference Include="..\..\..\..\code\dotnet\Runtime\src\RML.Interop\RML.Interop.csproj" />
+        <ProjectReference Include="..\..\..\..\code\dotnet\Roblox\src\Roblox\Roblox.csproj" Private="false" />
+        <ProjectReference Include="..\..\..\..\code\dotnet\Runtime\src\RML.Core\RML.Core.csproj" Private="false" />
+        <ProjectReference Include="..\..\..\..\code\dotnet\Runtime\src\RML.Interop\RML.Interop.csproj" Private="false" />
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="DiscordRichPresence" Version="1.6.1.70"/>
