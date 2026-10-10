@@ -34,7 +34,7 @@ namespace rml::qt
 		if (!fn)
 			return;
 		const QString value(text);
-		fn(this, column, value.data());
+		fn(this, column, &value);
 	}
 
 	void QTreeWidgetItem::set_tool_tip(const int column, const std::string_view text)
@@ -43,7 +43,7 @@ namespace rml::qt
 		if (!fn)
 			return;
 		const QString value(text);
-		fn(this, column, value.data());
+		fn(this, column, &value);
 	}
 
 	QTreeWidget* QTreeWidget::create(QWidget* parent)

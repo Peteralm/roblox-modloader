@@ -25,7 +25,7 @@ namespace RBX
 		rbx::signal<void(bool)> graphics_quality_signal;
 
 	private:
-		[[maybe_unused]] std::int64_t reserved_70[3];
+		[[maybe_unused]] std::string reserved_70;
 		[[maybe_unused]] std::uint64_t reserved_88[3];
 		[[maybe_unused]] std::uint32_t reserved_a0;
 		[[maybe_unused]] std::uint32_t reserved_a4;

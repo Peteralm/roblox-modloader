@@ -29,7 +29,7 @@ namespace rml::qt
 		if (!fn)
 			return;
 		const QString value(text);
-		fn(this, value.data());
+		fn(this, &value);
 	}
 
 	void QListWidget::clear()

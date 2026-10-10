@@ -86,6 +86,10 @@ namespace rml::qt::detail
 		return reinterpret_cast<Fn>(gui_export(signatures));
 	}
 
+	/// Fork: the widgets the fork binds (QWidget, layouts, list, tree, tool button) have no
+	/// measured mirror, so they are allocated with room to spare instead of sizeof(T).
+	inline constexpr std::size_t WIDGET_INSTANCE_SIZE = 128;
+
 	template<typename T, typename Ctor, typename... Args>
 	[[nodiscard]] T* heap_construct(const std::size_t size, Ctor ctor, Args&&... args)
 	{

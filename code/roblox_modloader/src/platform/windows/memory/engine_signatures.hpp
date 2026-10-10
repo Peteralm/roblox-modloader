@@ -90,13 +90,13 @@ namespace rml
 		        },
 		    },
 		    {"MEMBER_TABLE_FIND",
-		        "48 83 EC 18 ? ? ? 4C 8B D9 75",
+		        memory::referencing("Unable to query property {}. It is not scriptable").call(0),
 		        [](const memory::handle ptr) {
 			        g_pointers->m_roblox_pointers.member_table_find = ptr.as<functions::member_table_find>();
 		        }
 		    },
 	    {"GET_STRING_ATOM",
-		        "48 89 5C 24 ? 57 48 83 EC 20 48 8B 1D ? ? ? ? 48 8B F9 48 85 DB",
+		        memory::referencing("FrameTotal").call(0),
 		        [](const memory::handle ptr) {
 			        g_pointers->m_roblox_pointers.get_string_atom = ptr.as<functions::get_string_atom>();
 		        }
@@ -108,9 +108,9 @@ namespace rml
 		        }
 		    },
 		    {"SIGNAL_MUTEX_GET",
-		        "48 89 5C 24 ? 57 48 83 EC 30 48 8B F9 33 DB 48 89 5C 24 ? E8 ? ? ? ? 48 89 44 24 ? 88 5C 24 ? 48 8B C8 E8 ? ? ? ? 85 C0 0F 85",
+		        memory::referencing("Reference count corrupt").call(0),
 		        [](const memory::handle ptr) {
-			        g_pointers->m_roblox_pointers.signal_mutex_get = ptr.add(21).rip().as<functions::signal_mutex_get>();
+			        g_pointers->m_roblox_pointers.signal_mutex_get = ptr.as<functions::signal_mutex_get>();
 		        }
 		    },
 		    {"CONNECTION_DISCONNECT",

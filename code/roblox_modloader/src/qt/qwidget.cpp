@@ -56,7 +56,7 @@ namespace rml::qt
 			return result;
 
 		QList<QAction*> list;
-		memory::call_returning_member(fn, *list.raw_storage(), this);
+		memory::call_returning_member(fn, list, this);
 
 		result.reserve(static_cast<std::size_t>(list.size()));
 		for (QAction* action : list)

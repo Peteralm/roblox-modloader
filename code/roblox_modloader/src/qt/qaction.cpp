@@ -36,10 +36,8 @@ namespace rml::qt
 			return {};
 
 		// The getter returns QString by value, so the caller owns the storage.
-		void* storage = nullptr;
-		memory::call_returning_member(get, storage, static_cast<const void*>(this));
 		QString value;
-		std::memcpy(value.storage(), &storage, sizeof(storage));
+		memory::call_returning_member(get, value, static_cast<const void*>(this));
 		return value.to_utf8();
 	}
 
