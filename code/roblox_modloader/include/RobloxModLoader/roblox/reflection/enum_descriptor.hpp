@@ -1,105 +1,96 @@
 #pragma once
+
+#include "descriptor.hpp"
 #include "type.hpp"
 
-#include <algorithm>
-#include <functional>
-#include <map>
-#include <vector>
+#include "RobloxModLoader/util/layout_assert.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
 
 namespace RBX::Reflection
 {
 	class EnumDescriptor : public Type
 	{
 	public:
-		static std::vector<const EnumDescriptor*>::const_iterator enum_begin();
-		static std::vector<const EnumDescriptor*>::const_iterator enum_end();
-		static size_t size()
-		{
-			return all_enums().size();
-		}
-
 		class Item : public Descriptor
 		{
 		public:
-			const EnumDescriptor& owner;
-			const int value;
-			const size_t index;
+			const EnumDescriptor* owner;
+			int value;
 
 			Item() = delete;
-
-			bool convert_to(Variant& value) const
-			{
-				return owner.convert(index, value);
-			}
-
-			bool convert_to_string(std::string& value) const
-			{
-				return owner.convert_to_string(index, value);
-			}
 		};
 
-		typedef std::map<const Name*, const EnumDescriptor*> EnumNameTable;
-
-	private:
-		static EnumNameTable& all_enums_name_lookup();
-		static std::vector<const EnumDescriptor*>& all_enums();
-
-		static bool equalValue(const Item* item, const int int_value)
+		struct NameEntry
 		{
-			return item->value == int_value;
+			std::uint32_t hash;
+			std::uint16_t item;
+			std::uint16_t alias;
+		};
+
+		struct ValueEntry
+		{
+			std::int32_t value;
+			std::uint16_t item;
+		};
+
+		static constexpr std::uint16_t no_alias = 0xFFFF;
+
+		const Item* items;
+		std::size_t item_count;
+		const NameEntry* by_name;
+		std::size_t by_name_count;
+		const ValueEntry* by_value;
+		std::size_t by_value_count;
+		const char* const* aliases;
+		std::size_t alias_count;
+
+		EnumDescriptor() = delete;
+
+		virtual const Item* lookup(const char* name) const = 0;
+		virtual const Item* lookup_by_enum_value(int value) const = 0;
+		virtual const Item* lookup_by_enum_value_in_variant(const Variant& value) const = 0;
+		virtual void convert_typed_variant_to_int_value(const Variant& value, int& out) const = 0;
+		virtual void convert_int_value_to_typed_variant_if_valid_value(int value, Variant& out) const = 0;
+
+		[[nodiscard]] static constexpr std::uint32_t name_hash(const std::string_view name)
+		{
+			std::uint32_t hash = 0x811C9DC5u;
+			for (const auto c : name)
+			{
+				hash ^= static_cast<unsigned char>(c);
+				hash *= 0x01000193u;
+			}
+			return hash;
 		}
 
-		static int count;
-
-	protected:
-		std::vector<const Item*> all_items;
-		size_t enum_count;
-		size_t enum_count_msb;
-		EnumDescriptor(const char* typeName);
-		~EnumDescriptor();
-
-	public:
-		size_t get_enum_count() const
+		[[nodiscard]] std::span<const Item> all_items() const
 		{
-			return enum_count;
-		}
-		size_t get_enum_count_msb() const
-		{
-			return enum_count_msb;
-		}
-		std::vector<const Item*>::const_iterator begin() const
-		{
-			return all_items.begin();
-		}
-		std::vector<const Item*>::const_iterator end() const
-		{
-			return all_items.end();
-		}
-		static const EnumDescriptor* lookup_descriptor(const Name& name)
-		{
-			if (const EnumNameTable::const_iterator iter = all_enums_name_lookup().find(&name);
-			    iter != all_enums_name_lookup().end())
-				return iter->second;
-			return nullptr;
-		}
-		static const EnumDescriptor* lookup_descriptor(const Type& type)
-		{
-			if (type.is_enum)
-				return dynamic_cast<const EnumDescriptor*>(&type);
-
-			return nullptr;
+			return {items, item_count};
 		}
 
-		[[nodiscard]] bool is_value(int intValue) const
-		{
-			return std::ranges::find_if(all_items, [intValue]<typename T0>(T0&& PH1) {
-				return equalValue(std::forward<T0>(PH1), intValue);
-			}) != all_items.end();
-		}
-
-		virtual const Item* lookup(const char* text) const                     = 0;
-		[[nodiscard]] virtual const Item* lookup(const Variant& value) const   = 0;
-		virtual bool convert(size_t index, Variant& value) const               = 0;
-		virtual bool convert_to_string(size_t index, std::string& value) const = 0;
+		[[nodiscard]] const Item* find_item_by_value(int value) const;
+		[[nodiscard]] const Item* find_item_by_name(std::string_view name) const;
 	};
+
+	RML_LAYOUT_DIAGNOSTIC_PUSH()
+#if !defined(RML_WINDOWS)
+	RML_ASSERT_SIZE(Type, 0x40);
+	RML_ASSERT_OFFSET(Type, type_id, 0x30);
+	RML_ASSERT_OFFSET(Type, is_enum, 0x36);
+	RML_ASSERT_SIZE(EnumDescriptor, 0x80);
+	RML_ASSERT_OFFSET(EnumDescriptor, items, 0x40);
+	RML_ASSERT_OFFSET(EnumDescriptor, by_name, 0x50);
+	RML_ASSERT_OFFSET(EnumDescriptor, by_value, 0x60);
+	RML_ASSERT_OFFSET(EnumDescriptor, aliases, 0x70);
+	RML_ASSERT_SIZE(EnumDescriptor::Item, 0x38);
+	RML_ASSERT_OFFSET(EnumDescriptor::Item, owner, 0x28);
+	RML_ASSERT_OFFSET(EnumDescriptor::Item, value, 0x30);
+	RML_ASSERT_SIZE(EnumDescriptor::NameEntry, 0x8);
+	RML_ASSERT_SIZE(EnumDescriptor::ValueEntry, 0x8);
+#endif
+	RML_LAYOUT_DIAGNOSTIC_POP()
 }

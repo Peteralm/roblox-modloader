@@ -1,7 +1,9 @@
 #pragma once
 
 #include "RobloxModLoader/internal/common.hpp"
+#include "RobloxModLoader/memory/vtable.hpp"
 #include "RobloxModLoader/roblox/reflection/class_builder.hpp"
+#include "RobloxModLoader/roblox/reflection/hints.hpp"
 #include "RobloxModLoader/roblox/reflection/creatable.hpp"
 #include "RobloxModLoader/roblox/reflection/object.hpp"
 
@@ -23,6 +25,8 @@ namespace rml::reflection
 		std::string category;
 		PropertyType type;
 		std::shared_ptr<void> accessor;
+		PropertyHints hints;
+		const void* enum_key{};
 	};
 
 	struct FunctionSpec
@@ -46,6 +50,7 @@ namespace rml::reflection
 		std::vector<PropertySpec> properties;
 		std::vector<FunctionSpec> functions;
 		std::vector<EventSpec> events;
+		ClassHints hints;
 	};
 
 	struct ExtensionSpec
@@ -78,17 +83,10 @@ namespace rml::reflection
 		std::shared_ptr<void> create(RBX::EngineContext* context, RBX::CreatorRole role) const override;
 		bool is_serializable() const override;
 		bool is_script_creatable() const override;
-		const RBX::Reflection::ClassDescriptor* descriptor() const override;
 
 	private:
 		RegisteredClass& m_entry;
 	};
-
-	/// Where every Instance keeps its ClassDescriptor pointer; construct_mod_instance overwrites it.
-	inline constexpr std::size_t k_descriptor_field_offset = 0x18;
-	inline constexpr std::size_t k_vtable_prefix_slots = 2;
-	inline constexpr std::size_t k_cloned_vtable_slots = 160;
-	using ClonedVtable = std::array<void*, k_vtable_prefix_slots + k_cloned_vtable_slots>;
 
 	struct RegisteredClass
 	{
@@ -99,7 +97,7 @@ namespace rml::reflection
 		void** engine_vtable{};
 		std::unique_ptr<ModInstanceCreator> creator;
 		std::unique_ptr<std::byte[]> storage;
-		std::unique_ptr<ClonedVtable> vtable;
+		memory::VtableCopy vtable;
 		std::once_flag vtable_once;
 		std::vector<std::unique_ptr<std::byte[]>> member_storage;
 		std::vector<std::shared_ptr<void>> accessors;
@@ -122,7 +120,8 @@ namespace rml::reflection
 		[[nodiscard]] const RBX::ICreator* creator_for(const RBX::Name* name) const;
 		[[nodiscard]] RBX::Reflection::ClassDescriptor* find_engine_class(std::string_view name) const;
 		[[nodiscard]] RegisteredClass* class_of(const void* instance);
-		[[nodiscard]] void** vtable_for(RegisteredClass& entry, void** derived_vtable);
+		void report_engine_collisions() const;
+		[[nodiscard]] void* const* vtable_for(RegisteredClass& entry, void* const* derived_vtable);
 
 	private:
 		std::deque<RegisteredClass> m_classes;

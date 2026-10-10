@@ -5,6 +5,9 @@
 #include "RobloxModLoader/roblox/job_vtable.hpp"
 #include "RobloxModLoader/roblox/task_scheduler.hpp"
 #include "pointers.hpp"
+#include "RobloxModLoader/qt/qt_module.hpp"
+#include "render/engine_stages.hpp"
+#include "render/injection_table.hpp"
 #include "roblox/graphics/graphics_registry.hpp"
 
 #include <utility>
@@ -60,9 +63,71 @@ namespace rml
 			DetourHookHelper::add<Hooks::visual_engine_begin_render>("VISUAL_ENGINE_BEGIN_RENDER",
 			    reinterpret_cast<void*>(g_pointers->m_roblox_pointers.visual_engine_begin_render));
 
+		auto& injection_table = render::detail::InjectionTable::instance();
+		auto& engine_stages = render::detail::EngineStages::instance();
+
 		if (g_pointers->m_roblox_pointers.scene_manager_render_scene)
+		{
 			DetourHookHelper::add<Hooks::scene_manager_render_scene>("SCENE_MANAGER_RENDER_SCENE",
 			    reinterpret_cast<void*>(g_pointers->m_roblox_pointers.scene_manager_render_scene));
+			injection_table.resolve(render::InjectionPoint::at(render::FramePoint::FrameBegin));
+			injection_table.resolve(render::InjectionPoint::at(render::FramePoint::FrameEnd));
+		}
+
+		if (const auto& pointers = g_pointers->m_roblox_pointers; pointers.clouds_update && (pointers.clouds_composite || pointers.clouds_composite_clouds))
+		{
+			DetourHookHelper::add<Hooks::clouds_update>("CLOUDS_UPDATE", reinterpret_cast<void*>(pointers.clouds_update));
+			if (pointers.clouds_composite)
+				DetourHookHelper::add<Hooks::clouds_composite>("CLOUDS_COMPOSITE", reinterpret_cast<void*>(pointers.clouds_composite));
+			else
+				DetourHookHelper::add<Hooks::clouds_composite_clouds>("CLOUDS_COMPOSITE_CLOUDS", reinterpret_cast<void*>(pointers.clouds_composite_clouds));
+			injection_table.resolve(render::InjectionPoint::at(render::FramePoint::CloudsPrepare));
+			injection_table.resolve(render::InjectionPoint::at(render::FramePoint::MainAfterOpaque));
+			injection_table.resolve_stage(render::EngineStage::Clouds);
+			engine_stages.mark_hooked(render::EngineStage::Clouds);
+		}
+
+		if (const auto begin_pass = graphics::device_context_begin_pass_target())
+			DetourHookHelper::add<Hooks::device_context_begin_pass>("DEVICE_CONTEXT_BEGIN_PASS", begin_pass);
+
+		const bool classic_queues = g_pointers->m_roblox_pointers.render_objects_clipped != nullptr;
+		const bool main_view_queues = g_pointers->m_roblox_pointers.dispatch_scene_dispatch != nullptr;
+		if (classic_queues)
+			DetourHookHelper::add<Hooks::render_objects_clipped>("RENDER_OBJECTS_CLIPPED", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.render_objects_clipped));
+		if (main_view_queues)
+			DetourHookHelper::add<Hooks::dispatch_scene_dispatch>("DISPATCH_SCENE_DISPATCH", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.dispatch_scene_dispatch));
+		if (classic_queues || main_view_queues)
+		{
+			injection_table.load_queue_names();
+			injection_table.resolve_queues();
+			engine_stages.mark_queues_hooked();
+		}
+		if (classic_queues != main_view_queues)
+			RML_WARN("queue injection points cover only the {} pipeline", classic_queues ? "classic" : "MainView");
+
+		if (g_pointers->m_roblox_pointers.scene_manager_render_sky)
+		{
+			DetourHookHelper::add<Hooks::scene_manager_render_sky>("SCENE_MANAGER_RENDER_SKY", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.scene_manager_render_sky));
+			injection_table.resolve_stage(render::EngineStage::Sky);
+			engine_stages.mark_hooked(render::EngineStage::Sky);
+		}
+
+		if (g_pointers->m_roblox_pointers.scene_manager_render_ui)
+		{
+			DetourHookHelper::add<Hooks::scene_manager_render_ui>("SCENE_MANAGER_RENDER_UI", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.scene_manager_render_ui));
+			injection_table.resolve(render::InjectionPoint::at(render::FramePoint::UIBefore));
+			injection_table.resolve_stage(render::EngineStage::UI);
+			engine_stages.mark_hooked(render::EngineStage::UI);
+		}
+
+		if (const auto device_destructor = graphics::device_destructor_target())
+			DetourHookHelper::add<Hooks::device_destroy>("DEVICE_DESTROY", device_destructor);
+
+		if (g_pointers->m_roblox_pointers.reflection_metadata_load)
+			DetourHookHelper::add<Hooks::reflection_metadata_load>("REFLECTION_METADATA_LOAD", reinterpret_cast<void*>(g_pointers->m_roblox_pointers.reflection_metadata_load));
+
+		if (const auto translate = qt::detail::core_export_optional("QCoreApplication::translate(char const*, char const*, char const*, int)"))
+			DetourHookHelper::add<Hooks::qt_translate>("QT_TRANSLATE", translate);
 
 		if (const auto pre_submit_pass = graphics::adorn_render_pre_submit_pass_target())
 			DetourHookHelper::add<Hooks::adorn_render_pre_submit_pass>("ADORN_RENDER_PRE_SUBMIT_PASS", pre_submit_pass);

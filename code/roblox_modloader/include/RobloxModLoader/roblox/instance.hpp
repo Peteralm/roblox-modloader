@@ -1,12 +1,15 @@
 #pragma once
 #include "object.hpp"
 
+#include "RobloxModLoader/rml_export.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 
 #include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace RBX
@@ -31,11 +34,15 @@ namespace RBX
 
 	class InstanceProp
 	{
+	private:
+		[[maybe_unused]] boost::intrusive_ptr<rbx::signals::slots_holder> reserved_0;
+
 	public:
-		void* reserved;
+		Instance* parent;
+		Flyweight<std::string> name;
 	};
 
-	class Instance : public Object
+	class RML_EXPORT Instance : public Object, public InstanceProp
 	{
 	public:
 		virtual bool styled_properties_read() const
@@ -307,16 +314,30 @@ namespace RBX
 			rml::engine_virtual_unreachable();
 		}
 
-		InstanceProp prop;
-		Instance* parent;
-		Flyweight<std::string> name;
 		union
 		{
 			std::shared_ptr<std::vector<std::shared_ptr<Instance>>> children;
 		};
+		std::uint32_t num_local_replicated_children;
 
 	private:
-		std::byte reserved_88[0x28];
+		[[maybe_unused]] std::uint32_t reserved_8c;
+		[[maybe_unused]] std::uint32_t reserved_90;
+		[[maybe_unused]] std::uint16_t reserved_94;
+		[[maybe_unused]] std::uint8_t reserved_96;
+		[[maybe_unused]] std::uint8_t reserved_97[0x2B];
+
+	public:
+		std::uint16_t flags;
+
+	private:
+		[[maybe_unused]] std::uint8_t reserved_c4[4];
+
+	public:
+		[[nodiscard]] bool is_archivable() const noexcept
+		{
+			return (flags & 0x8) != 0;
+		}
 
 	protected:
 		Instance()
@@ -335,13 +356,42 @@ namespace RBX
 		}
 
 		std::string compute_full_name();
+
+		[[nodiscard]] std::size_t num_children() const;
+		[[nodiscard]] Instance* get_child(std::size_t index);
+		[[nodiscard]] const Instance* get_child(std::size_t index) const;
+		[[nodiscard]] const Instance* find_first_child_by_name(std::string_view find_name) const;
+		[[nodiscard]] Instance* find_first_child_by_name(std::string_view find_name);
+		[[nodiscard]] const Instance* find_first_child_of_type(std::string_view class_name) const;
+		[[nodiscard]] Instance* find_first_child_of_type(std::string_view class_name);
+
+		template<typename C>
+		[[nodiscard]] const C* find_first_child_of_type() const
+		{
+			if (children)
+			{
+				for (const auto& child : *children)
+				{
+					if (child && child->get_descriptor().is_a(C::class_name.data()))
+						return static_cast<const C*>(child.get());
+				}
+			}
+			return nullptr;
+		}
+
+		template<typename C>
+		[[nodiscard]] C* find_first_child_of_type()
+		{
+			return const_cast<C*>(std::as_const(*this).template find_first_child_of_type<C>());
+		}
 	};
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
-	RML_ASSERT_OFFSET(Instance, prop, 0x60);
 	RML_ASSERT_OFFSET(Instance, parent, 0x68);
 	RML_ASSERT_OFFSET(Instance, name, 0x70);
 	RML_ASSERT_OFFSET(Instance, children, 0x78);
-	RML_ASSERT_SIZE(Instance, 0xB0);
+	RML_ASSERT_OFFSET(Instance, num_local_replicated_children, 0x88);
+	RML_ASSERT_OFFSET(Instance, flags, 0xC2);
+	RML_ASSERT_SIZE(Instance, 0xC8);
 	RML_LAYOUT_DIAGNOSTIC_POP()
 }

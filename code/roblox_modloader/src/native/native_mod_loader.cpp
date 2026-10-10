@@ -4,11 +4,17 @@
 #include "RobloxModLoader/memory/module.hpp"
 #include "app/init_gate.hpp"
 #include "mod/mod_kind.hpp"
+#include "render/injection_dispatch.hpp"
 
 RML_LOG_SCOPE("NativeModLoader");
 
 namespace rml::native
 {
+	static void release_render_passes(const memory::module& module)
+	{
+		render::detail::InjectionDispatch::instance().graph().module_unloading(module.begin().as<std::uintptr_t>(), module.end().as<std::uintptr_t>());
+	}
+
 	std::filesystem::path mod_root_for(const std::filesystem::path& dll_path)
 	{
 		std::filesystem::path folder = dll_path.parent_path();
@@ -168,6 +174,7 @@ namespace rml::native
 
 		if (lm.module)
 		{
+			release_render_passes(*lm.module);
 			if (auto r = lm.module->detach(); !r)
 				return std::unexpected(std::format("Failed to unload native mod: {} : {}", path.string(), r.error()));
 		}
@@ -218,6 +225,7 @@ namespace rml::native
 			}
 			if (module)
 			{
+				release_render_passes(*module);
 				module->detach();
 			}
 		}

@@ -7,9 +7,7 @@
 TEST_CASE("content mirrors keep the measured layout")
 {
 	static_assert(sizeof(RBX::ContentId) == 8 + sizeof(std::string));
-#if defined(_WIN32)
-	// MSVC's std::unordered_map is 64 bytes where libc++'s is 40, and each map here moves the
-	// pair that follows it.
+#if defined(_MSC_VER)
 	static_assert(sizeof(RBX::ContentProviderTemporaryIdFactory) == 160);
 	static_assert(offsetof(RBX::ContentProviderTemporaryIdFactory, buffers) == 96);
 #else

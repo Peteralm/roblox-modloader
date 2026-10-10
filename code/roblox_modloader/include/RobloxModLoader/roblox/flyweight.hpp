@@ -17,13 +17,10 @@ namespace RBX
 			T value;
 			std::uint64_t hash;
 			std::uint32_t references;
-			std::uint32_t reserved_2c;
 		};
 
 		RML_LAYOUT_DIAGNOSTIC_PUSH()
 		RML_ASSERT_OFFSET(FlyweightData<std::string>, value, 0x8);
-		// Everything past `value` moves with the standard library's own std::string, which is
-		// 0x20 on the MSVC one Studio is built with and 0x18 on libc++.
 #if defined(RML_WINDOWS)
 		RML_ASSERT_OFFSET(FlyweightData<std::string>, hash, 0x28);
 		RML_ASSERT_OFFSET(FlyweightData<std::string>, references, 0x30);

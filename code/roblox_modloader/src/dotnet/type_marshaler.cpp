@@ -6,16 +6,28 @@
 #include "RobloxModLoader/roblox/reflection/property_descriptor.hpp"
 #include "RobloxModLoader/roblox/util/BrickColor.h"
 #include "RobloxModLoader/roblox/util/G3DCore.h"
+#include "RobloxModLoader/roblox/util/color_sequence.hpp"
+#include "RobloxModLoader/roblox/util/faces.hpp"
+#include "RobloxModLoader/roblox/util/number_range.hpp"
+#include "RobloxModLoader/roblox/util/ray.hpp"
+#include "RobloxModLoader/roblox/util/region3.hpp"
+#include "RobloxModLoader/roblox/util/udim.hpp"
+#include "RobloxModLoader/roblox/util/number_sequence.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 #include "RobloxModLoader/util/memory.hpp"
+#include "instance_handles.hpp"
 #include "pointers.hpp"
+#include "roblox/reflection/type_index.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <memory>
 #include <mutex>
-#include <unordered_set>
 #include <new>
+#include <span>
+#include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -23,150 +35,186 @@ RML_LOG_SCOPE("Interop");
 
 namespace rml::dotnet
 {
-	namespace
+	RML_ASSERT_SIZE(RBX::Vector2, 8);
+	RML_ASSERT_SIZE(RBX::Vector3, 12);
+	RML_ASSERT_SIZE(RBX::Color3, 12);
+	RML_ASSERT_SIZE(RBX::CoordinateFrame, 48);
+	RML_ASSERT_SIZE(RBX::Rect2D, 16);
+	RML_ASSERT_SIZE(RBX::BrickColor, 4);
+
+	using BlittableSetter = void (*)(RBX::Property& property, const void* bytes);
+
+	template<typename T>
+	static void set_blittable(RBX::Property& property, const void* bytes)
 	{
-		RML_ASSERT_LAYOUT_SIZE(RBX::Vector2, 8);
-		RML_ASSERT_LAYOUT_SIZE(RBX::Vector3, 12);
-		RML_ASSERT_LAYOUT_SIZE(RBX::Color3, 12);
-		RML_ASSERT_LAYOUT_SIZE(RBX::CoordinateFrame, 48);
-		RML_ASSERT_LAYOUT_SIZE(RBX::Rect2D, 16);
-		RML_ASSERT_LAYOUT_SIZE(RBX::BrickColor, 4);
+		property.set(*static_cast<const T*>(bytes));
+	}
 
-		static_assert(sizeof(float) == 4 && sizeof(int32_t) == 4, "Ray/UDim/UDim2/NumberRange/Region3/Faces/Axes/sequence-stride sizes below are engine-ABI facts (no matching 1:1 reconstructed C++ struct in this codebase; RBX::Ray/RbxRay carries a vtable and is not wire-compatible) and assume 32-bit float and int32 engine fields");
-
-		static_assert(TypeMarshaler::kMaxBlittableEngineTypeBytes >= sizeof(RBX::CoordinateFrame) && TypeMarshaler::kMaxBlittableEngineTypeBytes >= sizeof(RBX::Rect2D) && TypeMarshaler::kMaxBlittableEngineTypeBytes >= sizeof(RBX::Vector3) && TypeMarshaler::kMaxBlittableEngineTypeBytes >= sizeof(RBX::Color3) && TypeMarshaler::kMaxBlittableEngineTypeBytes >= sizeof(RBX::BrickColor), "TypeMarshaler::kMaxBlittableEngineTypeBytes must bound every reconstructed blittable engine type");
-
-		[[nodiscard]] size_t blittable_size(const RBX::Name& type_name) noexcept
-		{
-			static constexpr std::pair<const char*, size_t> table[] = {
-			    {"Vector3", sizeof(RBX::Vector3)},
-			    {"Vector2", sizeof(RBX::Vector2)},
-			    {"Color3", sizeof(RBX::Color3)},
-			    {"CoordinateFrame", sizeof(RBX::CoordinateFrame)},
-			    {"CFrame", sizeof(RBX::CoordinateFrame)},
-			    {"UDim", 8},
-			    {"UDim2", 16},
-			    {"Ray", 24},
-			    {"Rect2D", sizeof(RBX::Rect2D)},
-			    {"NumberRange", 8},
-			    {"Region3", TypeMarshaler::kMaxBlittableEngineTypeBytes},
-			    {"Faces", 4},
-			    {"Axes", 4},
-			    {"BrickColor", sizeof(RBX::BrickColor)},
-			};
-
-			for (const auto& [name, size] : table)
-			{
-				if (type_name == name)
-					return size;
-			}
-			return 0;
-		}
-
-		[[nodiscard]] size_t sequence_stride(const RBX::Name& type_name) noexcept
-		{
-			if (type_name == "NumberSequence")
-				return 12;
-			if (type_name == "ColorSequence")
-				return 20;
-			return 0;
-		}
-
-		[[nodiscard]] InteropVariant marshal_tuple(const RBX::Reflection::Tuple* tuple)
-		{
-			if (!tuple || !utils::memory::is_valid_pointer(reinterpret_cast<uintptr_t>(tuple)) || tuple->values.empty())
-				return null_value();
-
-			InteropStringPool strings;
-			std::vector<InteropVariant> values;
-			values.reserve(tuple->values.size());
-			for (const auto& value : tuple->values)
-				values.push_back(TypeMarshaler::encode_variant(value, &strings));
-
-			return tuple_value(values);
-		}
-
-		using TupleSharedPtr = std::shared_ptr<const RBX::Reflection::Tuple>;
-
-		void destroy_string_storage(void* storage)
-		{
-			static_cast<std::string*>(storage)->~basic_string();
-		}
-		void destroy_trivial_storage(void*)
-		{
-		}
-		void destroy_tuple_storage(void* storage)
-		{
-			static_cast<TupleSharedPtr*>(storage)->~shared_ptr();
-		}
-		void* copy_tuple_storage(void* dst, const void* src)
-		{
-			::new (dst) TupleSharedPtr(*static_cast<const TupleSharedPtr*>(src));
-			return dst;
-		}
-
-		const void* g_string_ops[3] = {nullptr, nullptr, reinterpret_cast<const void*>(&destroy_string_storage)};
-		const void* g_trivial_ops[3] = {nullptr, nullptr, reinterpret_cast<const void*>(&destroy_trivial_storage)};
-		const void* g_tuple_ops[3] = {reinterpret_cast<const void*>(&copy_tuple_storage), reinterpret_cast<const void*>(&copy_tuple_storage), reinterpret_cast<const void*>(&destroy_tuple_storage)};
-
-		[[nodiscard]] int tag_to_type_id(const InteropValueTag tag) noexcept
-		{
-			switch (tag)
-			{
-			case InteropValueTag::Bool: return RBX::Reflection::TypeId::Bool;
-			case InteropValueTag::Int64: return RBX::Reflection::TypeId::Int64;
-			case InteropValueTag::Float: return RBX::Reflection::TypeId::Float;
-			case InteropValueTag::Double: return RBX::Reflection::TypeId::Double;
-			case InteropValueTag::String: return RBX::Reflection::TypeId::String;
-			case InteropValueTag::Instance: return RBX::Reflection::TypeId::Instance;
-			default: return -1;
-			}
-		}
-
-		void destroy_tuple_contents(RBX::Reflection::Tuple* tuple)
-		{
-			for (auto& value : tuple->values)
-			{
-				if (const auto* const* ops = static_cast<const void* const*>(value.value_ops()); ops && ops[2])
-					reinterpret_cast<void (*)(void*)>(const_cast<void*>(ops[2]))(value.storage());
-			}
-			delete tuple;
-		}
-
-		// A yield function that returns an unsupported type is called once per keystroke by an
-		// editor mod; the first report is the useful one, the rest are noise.
-		void warn_unsupported_once(const RBX::Reflection::Type& type)
-		{
-			static std::mutex mutex;
-			static std::unordered_set<std::string> reported;
-
-			std::string name = type.name.c_str();
-			{
-				const std::scoped_lock lock(mutex);
-				if (!reported.insert(name).second)
-					return;
-			}
-
-			RML_WARN("Unsupported variant type '{}'", name);
-		}
-	} // namespace
-
-	const RBX::Reflection::Type* TypeMarshaler::find_type_by_id(const int type_id) noexcept
+	struct BlittableType
 	{
-		if (!g_pointers || !g_pointers->m_roblox_pointers.type_registry)
-			return nullptr;
+		const char* name;
+		int type_id;
+		size_t size;
+		BlittableSetter set;
+	};
 
-		const auto registry = g_pointers->m_roblox_pointers.type_registry;
+	static constexpr BlittableType k_blittable_types[] = {
+	    {"Vector3", RBX::Reflection::TypeId::Vector3, sizeof(RBX::Vector3), &set_blittable<RBX::Vector3>},
+	    {"Vector2", RBX::Reflection::TypeId::Vector2, sizeof(RBX::Vector2), &set_blittable<RBX::Vector2>},
+	    {"Color3", RBX::Reflection::TypeId::Color3, sizeof(RBX::Color3), &set_blittable<RBX::Color3>},
+	    {"CoordinateFrame", RBX::Reflection::TypeId::CoordinateFrame, sizeof(RBX::CoordinateFrame), &set_blittable<RBX::CoordinateFrame>},
+	    {"CFrame", RBX::Reflection::TypeId::CoordinateFrame, sizeof(RBX::CoordinateFrame), &set_blittable<RBX::CoordinateFrame>},
+	    {"Rect2D", RBX::Reflection::TypeId::Rect2D, sizeof(RBX::Rect2D), &set_blittable<RBX::Rect2D>},
+	    {"BrickColor", RBX::Reflection::TypeId::BrickColor, sizeof(RBX::BrickColor), &set_blittable<RBX::BrickColor>},
+	    {"UDim", RBX::Reflection::TypeId::UDim, sizeof(RBX::UDim), &set_blittable<RBX::UDim>},
+	    {"UDim2", RBX::Reflection::TypeId::UDim2, sizeof(RBX::UDim2), &set_blittable<RBX::UDim2>},
+	    {"Ray", RBX::Reflection::TypeId::Ray, sizeof(RBX::Ray), &set_blittable<RBX::Ray>},
+	    {"NumberRange", RBX::Reflection::TypeId::NumberRange, sizeof(RBX::NumberRange), &set_blittable<RBX::NumberRange>},
+	    {"Region3", RBX::Reflection::TypeId::Region3, sizeof(RBX::Region3), &set_blittable<RBX::Region3>},
+	    {"Faces", RBX::Reflection::TypeId::Faces, sizeof(RBX::Faces), &set_blittable<RBX::Faces>},
+	    {"Axes", RBX::Reflection::TypeId::Axes, sizeof(RBX::Axes), &set_blittable<RBX::Axes>},
+	};
 
-		if (!registry || registry->size() > 100000)
-			return nullptr;
+	static_assert(std::ranges::all_of(k_blittable_types, [](const BlittableType& type) { return type.size <= TypeMarshaler::kMaxBlittableEngineTypeBytes; }));
 
-		for (const auto* type : *registry)
+	[[nodiscard]] static const BlittableType* find_blittable(const RBX::Reflection::Type& type) noexcept
+	{
+		for (const auto& blittable : k_blittable_types)
 		{
-			if (type && type->type_id == type_id)
-				return type;
+			if (blittable.type_id == type.type_id)
+				return &blittable;
+		}
+		for (const auto& blittable : k_blittable_types)
+		{
+			if (type.name == blittable.name)
+				return &blittable;
 		}
 		return nullptr;
+	}
+
+	[[nodiscard]] static MarshalKind sequence_kind(const RBX::Name& type_name) noexcept
+	{
+		if (type_name == "NumberSequence")
+			return MarshalKind::NumberSequence;
+		if (type_name == "ColorSequence")
+			return MarshalKind::ColorSequence;
+		return MarshalKind::Unsupported;
+	}
+
+	template<typename Sequence>
+	[[nodiscard]] static InteropVariant pack_sequence(const Sequence& sequence)
+	{
+		InteropVariant out{};
+		out.tag = InteropValueTag::Blittable;
+		out.as_instance = 0;
+
+		const auto keypoints = sequence.keypoints.items();
+		if (auto* buffer = static_cast<std::byte*>(std::malloc(sizeof(int32_t) + keypoints.size_bytes())))
+		{
+			*reinterpret_cast<int32_t*>(buffer) = static_cast<int32_t>(keypoints.size());
+			std::memcpy(buffer + sizeof(int32_t), keypoints.data(), keypoints.size_bytes());
+			out.as_instance = reinterpret_cast<uintptr_t>(buffer);
+		}
+		return out;
+	}
+
+	template<typename Sequence>
+	static void set_sequence(RBX::Property property, const std::byte* buffer)
+	{
+		using Keypoint = typename Sequence::Keypoint;
+		const auto count = static_cast<size_t>(std::max(*reinterpret_cast<const int32_t*>(buffer), 0));
+		const std::span keypoints(reinterpret_cast<const Keypoint*>(buffer + sizeof(int32_t)), count);
+		const Sequence sequence{decltype(Sequence::keypoints)(keypoints)};
+		property.set(sequence);
+	}
+
+	// A yield function that returns an unsupported type is called once per keystroke by an
+	// editor mod; the first report is the useful one, the rest are noise.
+	static void warn_unsupported_once(const RBX::Reflection::Type& type)
+	{
+		static std::mutex mutex;
+		static std::unordered_set<std::string> reported;
+
+		std::string name = type.name.c_str();
+		{
+			const std::scoped_lock lock(mutex);
+			if (!reported.insert(name).second)
+				return;
+		}
+
+		RML_WARN("Unsupported variant type '{}'", name);
+	}
+
+	[[nodiscard]] static InteropVariant owned_instance_value(std::shared_ptr<RBX::Reflection::DescribedBase> object)
+	{
+		const auto handle = instance_handles().retain(std::move(object));
+		return handle ? instance_value(handle) : null_value();
+	}
+
+	[[nodiscard]] static InteropVariant owned_instance_value(RBX::Reflection::DescribedBase* object)
+	{
+		const auto handle = instance_handles().retain(object);
+		return handle ? instance_value(handle) : null_value();
+	}
+
+	[[nodiscard]] static InteropVariant marshal_tuple(const RBX::Reflection::Tuple* tuple, const InstanceOwnership ownership)
+	{
+		if (!tuple || !utils::memory::is_valid_pointer(reinterpret_cast<uintptr_t>(tuple)) || tuple->values.empty())
+			return null_value();
+
+		InteropStringPool strings;
+		std::vector<InteropVariant> values;
+		values.reserve(tuple->values.size());
+		for (const auto& value : tuple->values)
+			values.push_back(TypeMarshaler::encode_variant(value, &strings, ownership));
+
+		return tuple_value(values);
+	}
+
+	using TupleSharedPtr = std::shared_ptr<const RBX::Reflection::Tuple>;
+
+	static void copy_trivial_storage(const char* source, char* storage)
+	{
+		std::memcpy(storage, source, RBX::Reflection::Variant::storage_size);
+	}
+
+	static void move_trivial_storage(char* source, char* storage)
+	{
+		std::memcpy(storage, source, RBX::Reflection::Variant::storage_size);
+	}
+
+	static void destroy_trivial_storage(char*)
+	{
+	}
+
+	const RBX::Reflection::detail::holder* TypeMarshaler::trivially_copied_holder() noexcept
+	{
+		static constexpr RBX::Reflection::detail::holder holder{&copy_trivial_storage, &move_trivial_storage, &destroy_trivial_storage};
+		return &holder;
+	}
+
+	[[nodiscard]] static int tag_to_type_id(const InteropValueTag tag) noexcept
+	{
+		switch (tag)
+		{
+		case InteropValueTag::Bool: return RBX::Reflection::TypeId::Bool;
+		case InteropValueTag::Int64: return RBX::Reflection::TypeId::Int64;
+		case InteropValueTag::Float: return RBX::Reflection::TypeId::Float;
+		case InteropValueTag::Double: return RBX::Reflection::TypeId::Double;
+		case InteropValueTag::String: return RBX::Reflection::TypeId::String;
+		case InteropValueTag::Instance: return RBX::Reflection::TypeId::Instance;
+		default: return -1;
+		}
+	}
+
+	static void destroy_tuple_contents(RBX::Reflection::Tuple* tuple)
+	{
+		for (auto& value : tuple->values)
+		{
+			if (const auto* ops = value.value_ops(); ops && ops->destruct_func)
+				ops->destruct_func(static_cast<char*>(value.storage()));
+		}
+		delete tuple;
 	}
 
 	bool TypeMarshaler::build_tuple_variant(const InteropVariant* args, const uint32_t count, const RBX::Reflection::Type* tuple_type, RBX::Reflection::Variant& out)
@@ -179,17 +227,17 @@ namespace rml::dotnet
 
 		for (uint32_t i = 0; i < count; ++i)
 		{
-			const auto* type = find_type_by_id(tag_to_type_id(args[i].tag));
+			const auto* type = reflection::TypeIndex::find_by_id(tag_to_type_id(args[i].tag));
 			if (!type)
 				continue;
 
 			RBX::Reflection::Variant inner;
-			const void* ops = args[i].tag == InteropValueTag::String ? g_string_ops : g_trivial_ops;
+			const auto* ops = args[i].tag == InteropValueTag::String ? RBX::Reflection::detail::typed_holder<std::string>::singleton() : trivially_copied_holder();
 			if (decode_argument(type, args[i], inner, ops))
 				tuple->values.push_back(std::move(inner));
 		}
 
-		out.set_type_and_ops(tuple_type, g_tuple_ops);
+		out.set_type_and_ops(tuple_type, RBX::Reflection::detail::typed_holder<TupleSharedPtr>::singleton());
 		::new (out.storage()) TupleSharedPtr(std::move(tuple));
 		return true;
 	}
@@ -211,29 +259,18 @@ namespace rml::dotnet
 		case RBX::Reflection::TypeId::Instance: return {MarshalKind::Instance, 0};
 		case RBX::Reflection::TypeId::Instances: return {MarshalKind::InstanceArray, 0};
 		case RBX::Reflection::TypeId::Tuple: return {MarshalKind::Tuple, 0};
-		case RBX::Reflection::TypeId::Vector3: return {MarshalKind::Blittable, sizeof(RBX::Vector3)};
-		case RBX::Reflection::TypeId::Vector2: return {MarshalKind::Blittable, sizeof(RBX::Vector2)};
-		case RBX::Reflection::TypeId::Color3: return {MarshalKind::Blittable, sizeof(RBX::Color3)};
-		case RBX::Reflection::TypeId::CoordinateFrame: return {MarshalKind::Blittable, sizeof(RBX::CoordinateFrame)};
-		case RBX::Reflection::TypeId::Rect2D: return {MarshalKind::Blittable, sizeof(RBX::Rect2D)};
-		case RBX::Reflection::TypeId::BrickColor: return {MarshalKind::Blittable, sizeof(RBX::BrickColor)};
-		case RBX::Reflection::TypeId::UDim: return {MarshalKind::Blittable, 8};
-		case RBX::Reflection::TypeId::UDim2: return {MarshalKind::Blittable, 16};
-		case RBX::Reflection::TypeId::Ray: return {MarshalKind::Blittable, 24};
-		case RBX::Reflection::TypeId::NumberRange: return {MarshalKind::Blittable, 8};
-		case RBX::Reflection::TypeId::Region3: return {MarshalKind::Blittable, kMaxBlittableEngineTypeBytes};
-		case RBX::Reflection::TypeId::Faces: return {MarshalKind::Blittable, 4};
-		case RBX::Reflection::TypeId::Axes: return {MarshalKind::Blittable, 4};
-		case RBX::Reflection::TypeId::NumberSequence: return {MarshalKind::Sequence, 12};
-		case RBX::Reflection::TypeId::ColorSequence: return {MarshalKind::Sequence, 20};
+		case RBX::Reflection::TypeId::NumberSequence: return {MarshalKind::NumberSequence, sizeof(RBX::NumberSequence)};
+		case RBX::Reflection::TypeId::ColorSequence: return {MarshalKind::ColorSequence, sizeof(RBX::ColorSequence)};
 		default: break;
 		}
 
-		if (const auto size = blittable_size(type.name); size != 0)
-			return {MarshalKind::Blittable, size};
+		if (const auto* blittable = find_blittable(type))
+			return {MarshalKind::Blittable, blittable->size};
 
-		if (const auto stride = sequence_stride(type.name); stride != 0)
-			return {MarshalKind::Sequence, stride};
+		if (const auto kind = sequence_kind(type.name); kind == MarshalKind::NumberSequence)
+			return {kind, sizeof(RBX::NumberSequence)};
+		else if (kind == MarshalKind::ColorSequence)
+			return {kind, sizeof(RBX::ColorSequence)};
 
 		if (type.is_enum)
 			return {MarshalKind::Enum, 0};
@@ -247,7 +284,7 @@ namespace rml::dotnet
 		return {MarshalKind::Unsupported, 0};
 	}
 
-	InteropVariant TypeMarshaler::encode_variant(const RBX::Reflection::Variant& variant, InteropStringPool* strings)
+	InteropVariant TypeMarshaler::encode_variant(const RBX::Reflection::Variant& variant, InteropStringPool* strings, const InstanceOwnership ownership)
 	{
 		if (variant.is_void())
 			return null_value();
@@ -266,12 +303,14 @@ namespace rml::dotnet
 				RML_WARN("Dropping implausible instance handle {:#x} for type '{}'", instance, type.name.c_str());
 				return null_value();
 			}
-			return instance_value(instance);
+			return ownership == InstanceOwnership::Transferred ? owned_instance_value(*shared) : instance_value(instance);
 		}
 		case MarshalKind::Instance:
 		{
 			const auto* instance = variant.try_cast<RBX::Instance*>();
-			return instance ? instance_value(reinterpret_cast<uintptr_t>(*instance)) : null_value();
+			if (!instance)
+				return null_value();
+			return ownership == InstanceOwnership::Transferred ? owned_instance_value(*instance) : instance_value(reinterpret_cast<uintptr_t>(*instance));
 		}
 		case MarshalKind::String:
 			return strings ? string_value(variant.try_cast<std::string>()->c_str(), *strings) :
@@ -285,7 +324,7 @@ namespace rml::dotnet
 		case MarshalKind::Tuple:
 		{
 			const auto* shared = variant.try_cast<TupleSharedPtr>();
-			return marshal_tuple(shared ? shared->get() : nullptr);
+			return marshal_tuple(shared ? shared->get() : nullptr, ownership);
 		}
 		default: warn_unsupported_once(type); return null_value();
 		}
@@ -302,7 +341,7 @@ namespace rml::dotnet
 		if (kind == MarshalKind::RefInstance)
 		{
 			const auto* ref_descriptor = dynamic_cast<const RBX::Reflection::RefPropertyDescriptor*>(descriptor);
-			return instance_value(reinterpret_cast<uintptr_t>(ref_descriptor->get_ref_value(instance)));
+			return owned_instance_value(ref_descriptor->get_ref_value(instance));
 		}
 
 		if (kind == MarshalKind::Unsupported)
@@ -316,13 +355,16 @@ namespace rml::dotnet
 		if (variant.is_void())
 			return null_value();
 
-		if (kind == MarshalKind::Sequence)
-			return pack_sequence(variant.try_cast<std::byte>(), byte_size);
+		if (kind == MarshalKind::NumberSequence)
+			return pack_sequence(*variant.try_cast<RBX::NumberSequence>());
+
+		if (kind == MarshalKind::ColorSequence)
+			return pack_sequence(*variant.try_cast<RBX::ColorSequence>());
 
 		if (kind == MarshalKind::Blittable)
 			return blittable_value(variant.try_cast<std::byte>(), byte_size);
 
-		return encode_variant(variant);
+		return encode_variant(variant, nullptr, InstanceOwnership::Transferred);
 	}
 
 	bool TypeMarshaler::decode_property(const RBX::Reflection::PropertyDescriptor* descriptor, RBX::Reflection::DescribedBase* instance, const InteropVariant& value)
@@ -346,22 +388,17 @@ namespace rml::dotnet
 			return true;
 		}
 
-		if (plan.kind == MarshalKind::Sequence)
+		if (plan.kind == MarshalKind::NumberSequence || plan.kind == MarshalKind::ColorSequence)
 		{
 			if (value.tag != InteropValueTag::Blittable || value.as_instance == 0)
 				return false;
 
 			const auto* buffer = reinterpret_cast<const std::byte*>(value.as_instance);
-			const auto count = *reinterpret_cast<const int32_t*>(buffer);
-			const auto* keys = buffer + sizeof(int32_t);
-
-			engine_vector_header header{};
-			header.begin = keys;
-			header.end = keys + static_cast<size_t>(count < 0 ? 0 : count) * plan.byte_size;
-			header.capacity = header.end;
-
 			RBX::Property property(*descriptor, instance);
-			property.set(*reinterpret_cast<const std::array<std::byte, sizeof(engine_vector_header)>*>(&header));
+			if (plan.kind == MarshalKind::NumberSequence)
+				set_sequence<RBX::NumberSequence>(property, buffer);
+			else
+				set_sequence<RBX::ColorSequence>(property, buffer);
 			return true;
 		}
 
@@ -373,17 +410,11 @@ namespace rml::dotnet
 			const auto* bytes = reinterpret_cast<const void*>(value.as_instance);
 			RBX::Property property(*descriptor, instance);
 
-			switch (plan.byte_size)
-			{
-			case 4: property.set(*static_cast<const std::array<std::byte, 4>*>(bytes)); return true;
-			case 8: property.set(*static_cast<const std::array<std::byte, 8>*>(bytes)); return true;
-			case 12: property.set(*static_cast<const std::array<std::byte, 12>*>(bytes)); return true;
-			case 16: property.set(*static_cast<const std::array<std::byte, 16>*>(bytes)); return true;
-			case 24: property.set(*static_cast<const std::array<std::byte, 24>*>(bytes)); return true;
-			case 48: property.set(*static_cast<const std::array<std::byte, 48>*>(bytes)); return true;
-			case 60: property.set(*static_cast<const std::array<std::byte, 60>*>(bytes)); return true;
-			default: return false;
-			}
+			const auto* blittable = find_blittable(type);
+			if (!blittable)
+				return false;
+			blittable->set(property, bytes);
+			return true;
 		}
 
 		if (plan.kind == MarshalKind::Bool)
@@ -431,7 +462,7 @@ namespace rml::dotnet
 		return false;
 	}
 
-	bool TypeMarshaler::decode_argument(const RBX::Reflection::Type* type, const InteropVariant& value, RBX::Reflection::Variant& out, const void* value_ops)
+	bool TypeMarshaler::decode_argument(const RBX::Reflection::Type* type, const InteropVariant& value, RBX::Reflection::Variant& out, const RBX::Reflection::detail::holder* value_ops)
 	{
 		if (!type)
 			return false;
@@ -499,7 +530,7 @@ namespace rml::dotnet
 		}
 	}
 
-	void TypeMarshaler::encode_return_value(const RBX::Reflection::Type* type, const uint64_t raw_return, const uintptr_t return_slot_address, InteropVariant& out) noexcept
+	void TypeMarshaler::encode_return_value(const RBX::Reflection::Type* type, const uint64_t raw_return, void* const return_storage, InteropVariant& out) noexcept
 	{
 		if (!type)
 		{
@@ -513,8 +544,8 @@ namespace rml::dotnet
 		{
 		case MarshalKind::Tuple:
 		{
-			auto* slot = reinterpret_cast<std::shared_ptr<const RBX::Reflection::Tuple>*>(return_slot_address);
-			out = marshal_tuple(slot ? slot->get() : nullptr);
+			auto* slot = static_cast<std::shared_ptr<const RBX::Reflection::Tuple>*>(return_storage);
+			out = marshal_tuple(slot ? slot->get() : nullptr, InstanceOwnership::Transferred);
 			std::destroy_at(slot);
 			return;
 		}
@@ -523,7 +554,7 @@ namespace rml::dotnet
 			out.tag = InteropValueTag::InstanceArray;
 			out.as_instance = 0;
 
-			auto* slot = reinterpret_cast<std::shared_ptr<RBX::Instances>*>(return_slot_address);
+			auto* slot = static_cast<std::shared_ptr<RBX::Instances>*>(return_storage);
 			if (const auto& instances_ptr = *slot; instances_ptr && !instances_ptr->empty())
 			{
 				const auto& instances = *instances_ptr;
@@ -538,7 +569,7 @@ namespace rml::dotnet
 
 					for (const auto& element : instances)
 					{
-						if (const auto handle = reinterpret_cast<uintptr_t>(element.get()))
+						if (const auto handle = instance_handles().retain(element))
 							handles[written++] = handle;
 					}
 					*count_field = written;
@@ -552,20 +583,26 @@ namespace rml::dotnet
 		case MarshalKind::RefInstance:
 		case MarshalKind::Instance:
 		{
-			auto* slot = reinterpret_cast<std::shared_ptr<RBX::Instance>*>(return_slot_address);
-			out = instance_value(reinterpret_cast<uintptr_t>(slot->get()));
+			auto* slot = static_cast<std::shared_ptr<RBX::Instance>*>(return_storage);
+			out = owned_instance_value(*slot);
 			std::destroy_at(slot);
 			return;
 		}
 		case MarshalKind::String:
 		{
-			auto* slot = reinterpret_cast<std::string*>(return_slot_address);
+			auto* slot = static_cast<std::string*>(return_storage);
 			out = string_value(slot->c_str());
 			std::destroy_at(slot);
 			return;
 		}
 		case MarshalKind::Blittable:
-			out = blittable_value(reinterpret_cast<const void*>(return_slot_address), plan.byte_size);
+			out = blittable_value(return_storage, plan.byte_size);
+			return;
+		case MarshalKind::Bool:
+			out = bool_value(static_cast<std::uint8_t>(raw_return) != 0);
+			return;
+		case MarshalKind::Number:
+			out = int64_value(type->type_id == RBX::Reflection::TypeId::Int ? static_cast<std::int32_t>(raw_return) : static_cast<std::int64_t>(raw_return));
 			return;
 		default: break;
 		}

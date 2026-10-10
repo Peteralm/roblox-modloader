@@ -1,6 +1,8 @@
 #pragma once
 
 #include "RobloxModLoader/roblox/content_id.hpp"
+#include "RobloxModLoader/roblox/rsl/mutex.hpp"
+#include "RobloxModLoader/roblox/util/string_view.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 
 #include <cstddef>
@@ -28,13 +30,12 @@ namespace RBX
 	class ContentProviderTemporaryIdFactory
 	{
 	public:
-		const char* name;
-		std::size_t name_length;
-		std::byte files_mutex[8];
+		StringView name;
+		RSL::Mutex files_mutex;
 		union {
 			std::unordered_map<ContentId, std::string> files;
 		};
-		std::byte buffers_mutex[8];
+		RSL::Mutex buffers_mutex;
 		union {
 			std::unordered_map<ContentId, std::weak_ptr<const ReadOnlySharedBuffer>> buffers;
 		};
@@ -67,9 +68,9 @@ namespace RBX
 	RML_ASSERT_OFFSET(ContentProviderTemporaryIdFactory, files_mutex, 16);
 	RML_ASSERT_OFFSET(ContentProviderTemporaryIdFactory, files, 24);
 #if defined(RML_WINDOWS)
-	RML_ASSERT_OFFSET(ContentProviderTemporaryIdFactory, buffers_mutex, 0x58);
-	RML_ASSERT_OFFSET(ContentProviderTemporaryIdFactory, buffers, 0x60);
-	RML_ASSERT_SIZE(ContentProviderTemporaryIdFactory, 0xa0);
+	RML_ASSERT_OFFSET(ContentProviderTemporaryIdFactory, buffers_mutex, 88);
+	RML_ASSERT_OFFSET(ContentProviderTemporaryIdFactory, buffers, 96);
+	RML_ASSERT_SIZE(ContentProviderTemporaryIdFactory, 160);
 #else
 	RML_ASSERT_OFFSET(ContentProviderTemporaryIdFactory, buffers_mutex, 64);
 	RML_ASSERT_OFFSET(ContentProviderTemporaryIdFactory, buffers, 72);

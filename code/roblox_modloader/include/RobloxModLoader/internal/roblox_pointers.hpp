@@ -32,18 +32,10 @@ struct RobloxPointers
 	void* m_rbx_crash;
 	functions::print print;
 
-	void* m_profile_log;
-
-	functions::get_scheduler get_scheduler;
-
-	// Script Context
-	void* resume_waiting_scripts;
 
 	functions::get_string_atom get_string_atom;
 	functions::name_declare name_declare;
-	functions::descriptor_lookup descriptor_lookup;
-	
-	std::uint64_t member_table_offset;
+	functions::member_table_find member_table_find;
 
 	// Lua Functions
 	functions::luau_execute luau_execute;
@@ -140,10 +132,9 @@ struct RobloxPointers
 	functions::luaA_pseudo2addr luaA_pseudo2addr;
 
 	functions::object_create_by_name object_create_by_name;
-	functions::instance_bridge_push instance_bridge_push;
 	functions::build_menu_bar_from_dom build_menu_bar_from_dom;
 
-	functions::signal_disconnect signal_disconnect;
+	functions::connection_disconnect connection_disconnect;
 	functions::signal_slot_free signal_slot_free;
 	functions::signal_mutex_get signal_mutex_get;
 	functions::slots_holder_release slots_holder_release;
@@ -159,10 +150,20 @@ struct RobloxPointers
 	functions::event_descriptor_ctor event_descriptor_ctor;
 	functions::visual_engine_begin_render visual_engine_begin_render;
 	functions::scene_manager_render_scene scene_manager_render_scene;
+	functions::clouds_update clouds_update;
+	functions::clouds_composite clouds_composite;
+	functions::clouds_composite_clouds clouds_composite_clouds;
+	functions::render_objects_clipped render_objects_clipped;
+	functions::dispatch_scene_dispatch dispatch_scene_dispatch;
+	functions::scene_manager_render_sky scene_manager_render_sky;
+	functions::scene_manager_render_ui scene_manager_render_ui;
+	functions::reflection_metadata_get_singleton reflection_metadata_get_singleton;
+	functions::reflection_metadata_load reflection_metadata_load;
+	functions::enum_descriptor_ctor enum_descriptor_ctor;
+	functions::enum_item_ctor enum_item_ctor;
+	functions::enum_descriptor_lookup enum_descriptor_lookup;
 
 	const std::vector<const RBX::Reflection::Type*>* type_registry;
-	// Windows files mod creators through it; macOS keeps the getCreator hook and leaves it null.
-	functions::creatable_register_creator creatable_register_creator;
 };
 #pragma pack(pop)
 static_assert(sizeof(RobloxPointers) % 8 == 0, "Pointers are not properly aligned");

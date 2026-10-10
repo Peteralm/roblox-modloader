@@ -11,28 +11,66 @@
 #include <array>
 #include <cstddef>
 #include <deque>
+#include <memory>
 #include <new>
 #include <string>
+#include <utility>
 
 namespace rml::dotnet
 {
-	inline constexpr std::size_t kEngineReturnSlotTailBytes = 56;
+	template<class T>
+	class ByValueArguments
+	{
+	public:
+		ByValueArguments() = default;
+		ByValueArguments(const ByValueArguments&) = delete;
+		ByValueArguments& operator=(const ByValueArguments&) = delete;
 
-	static_assert(sizeof(uint64_t) + kEngineReturnSlotTailBytes >= TypeMarshaler::kMaxBlittableEngineTypeBytes,
-	    "EngineReturnSlot tail must leave enough contiguous room after Arguments::return_value for the largest blittable engine return type");
+		~ByValueArguments()
+		{
+			if (m_handed_over)
+				return;
+			for (auto& slot : m_slots)
+				std::destroy_at(slot.value());
+		}
 
-	using EngineReturnSlot = std::array<std::byte, kEngineReturnSlotTailBytes>;
+		template<class... Args>
+		T& emplace(Args&&... args)
+		{
+			auto& slot = m_slots.emplace_back();
+			return *std::construct_at(reinterpret_cast<T*>(slot.storage), std::forward<Args>(args)...);
+		}
+
+		void hand_over() noexcept
+		{
+			m_handed_over = true;
+		}
+
+	private:
+		struct Slot
+		{
+			alignas(T) std::byte storage[sizeof(T)];
+
+			T* value() noexcept
+			{
+				return std::launder(reinterpret_cast<T*>(storage));
+			}
+		};
+
+		std::deque<Slot> m_slots;
+		bool m_handed_over{};
+	};
 
 	class DotNetArguments final : public RBX::Reflection::FunctionDescriptor::Arguments
 	{
-		alignas(16) EngineReturnSlot m_return_slot{};
 		const InteropVariant* m_args;
 		uint32_t m_count;
 
 		const RBX::Reflection::SignatureDescriptor* m_signature{nullptr};
 		const RBX::Reflection::Type* m_tuple_type{nullptr};
 
-		mutable std::deque<std::string> m_string_storage;
+		mutable ByValueArguments<std::string> m_strings;
+		mutable ByValueArguments<std::shared_ptr<RBX::Instance>> m_instances;
 		mutable RBX::Reflection::Variant m_tuple_value{};
 		mutable bool m_tuple_built{false};
 
@@ -43,12 +81,10 @@ namespace rml::dotnet
 		    m_count(count),
 		    m_signature(signature)
 		{
-			return_value = 0;
-
 			if (!m_signature)
 				return;
 
-			const auto sig_args = m_signature->arguments();
+			const auto& sig_args = m_signature->arguments;
 			if (sig_args.size() == 1 && sig_args[0].type && sig_args[0].type->type_id == RBX::Reflection::TypeId::Tuple)
 				m_tuple_type = sig_args[0].type;
 		}
@@ -72,7 +108,7 @@ namespace rml::dotnet
 			if (!is_valid(index) || !m_signature)
 				return false;
 
-			const auto sig_args = m_signature->arguments();
+			const auto& sig_args = m_signature->arguments;
 			if (static_cast<size_t>(index - 1) >= sig_args.size())
 				return false;
 
@@ -146,9 +182,8 @@ namespace rml::dotnet
 			if (!ptr)
 				return false;
 
-			value = std::shared_ptr<RBX::Reflection::DescribedBase>(ptr, [](RBX::Reflection::DescribedBase*) {
-			});
-			return true;
+			value = ptr->weak_from_this().lock();
+			return value != nullptr;
 		}
 
 		bool get_enum(const int index, [[maybe_unused]] const RBX::Reflection::EnumDescriptor& desc, int& value) const override
@@ -179,39 +214,47 @@ namespace rml::dotnet
 			const auto& v = m_args[index - 1];
 
 			if (v.tag == InteropValueTag::String)
-				return &m_string_storage.emplace_back(v.as_string ? v.as_string : "");
+				return &m_strings.emplace(v.as_string ? v.as_string : "");
+
+			if (v.tag == InteropValueTag::Instance)
+				return &m_instances.emplace(owner_of(v.as_instance));
 
 			return reinterpret_cast<void*>(v.as_uint64);
 		}
 
+		void hand_over_by_value_arguments() noexcept
+		{
+			m_strings.hand_over();
+			m_instances.hand_over();
+		}
+
 	private:
+		[[nodiscard]] static std::shared_ptr<RBX::Instance> owner_of(const uintptr_t handle)
+		{
+			auto* const object = reinterpret_cast<RBX::Reflection::DescribedBase*>(handle);
+			return object ? std::static_pointer_cast<RBX::Instance>(object->weak_from_this().lock()) : nullptr;
+		}
+
 		[[nodiscard]] bool is_valid(const int index) const noexcept
 		{
 			return index >= 1 && static_cast<uint32_t>(index) <= m_count;
 		}
 
-		[[nodiscard]] const void* borrow_value_ops(const RBX::Reflection::Type* type) const
+		[[nodiscard]] const RBX::Reflection::detail::holder* borrow_value_ops(const RBX::Reflection::Type* type) const
 		{
 			if (m_signature)
 			{
-				for (const auto& arg : m_signature->arguments())
+				for (const auto& arg : m_signature->arguments)
 				{
 					if (arg.type == type && !arg.default_handle.is_void())
 					{
-						if (const void* ops = arg.default_handle.value_ops())
+						if (const auto* ops = arg.default_handle.value_ops())
 							return ops;
 					}
 				}
 			}
 
-			static void (*const destroy_string)(void*) = [](void* storage) {
-				static_cast<std::string*>(storage)->~basic_string();
-			};
-			static void (*const destroy_trivial)(void*) = [](void*) {};
-			static const void* string_ops[3] = {nullptr, nullptr, reinterpret_cast<void*>(destroy_string)};
-			static const void* trivial_ops[3] = {nullptr, nullptr, reinterpret_cast<void*>(destroy_trivial)};
-
-			return type && type->name == "string" ? string_ops : trivial_ops;
+			return type && type->name == "string" ? RBX::Reflection::detail::typed_holder<std::string>::singleton() : TypeMarshaler::trivially_copied_holder();
 		}
 
 		template<typename T>
@@ -225,12 +268,6 @@ namespace rml::dotnet
 			out = *ptr;
 			return true;
 		}
-
-		RML_LAYOUT_GUARD_BEGIN()
-			RML_ASSERT_LAYOUT_OFFSET(DotNetArguments, m_return_slot,
-			    offsetof(RBX::Reflection::FunctionDescriptor::Arguments, return_value) +
-			        sizeof(RBX::Reflection::FunctionDescriptor::Arguments::return_value));
-		RML_LAYOUT_GUARD_END()
 	};
 
 } // namespace rml::dotnet

@@ -113,7 +113,7 @@ namespace rml::luau
 		m_by_global_state[access::state(global_state)->global] = host.get();
 		m_hosts[type] = std::move(host);
 
-		RML_INFO("Bound a script host to DataModel type {}", static_cast<int>(type));
+		RML_INFO("Bound a script host to DataModel type {}", std::to_underlying(type));
 	}
 
 	void ScriptRuntime::unbind_host(const RBX::DataModelType type)
@@ -135,7 +135,7 @@ namespace rml::luau
 		}
 
 		retired->shutdown();
-		RML_INFO("Unbound the script host for DataModel type {}", static_cast<int>(type));
+		RML_INFO("Unbound the script host for DataModel type {}", std::to_underlying(type));
 	}
 
 	ScriptHost* ScriptRuntime::host(const RBX::DataModelType type) noexcept
@@ -189,7 +189,7 @@ namespace rml::luau
 		auto* target = host(type);
 		if (!target)
 		{
-			RML_WARN("No script host is bound to DataModel type {}", static_cast<int>(type));
+			RML_WARN("No script host is bound to DataModel type {}", std::to_underlying(type));
 			return;
 		}
 
@@ -214,7 +214,7 @@ namespace rml::luau
 			}
 		}
 
-		RML_INFO("Queued {} scripts for DataModel type {}", posted, static_cast<int>(type));
+		RML_INFO("Queued {} scripts for DataModel type {}", posted, std::to_underlying(type));
 	}
 
 	std::expected<ModReloadPlan, std::string> ScriptRuntime::plan_reload(const std::string& mod_name,
@@ -381,7 +381,7 @@ namespace rml::luau
 		if (!host)
 		{
 			return std::unexpected(vm::VmError::unavailable(
-			    std::format("no script host is bound to DataModel type {}", static_cast<int>(context))));
+			    std::format("no script host is bound to DataModel type {}", std::to_underlying(context))));
 		}
 
 		return host;

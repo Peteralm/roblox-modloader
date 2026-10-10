@@ -4,6 +4,7 @@
 #include "RobloxModLoader/roblox/reflection/yield_function_descriptor.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 #include "dotnet_variant.hpp"
+#include "instance_handles.hpp"
 #include "interop_registry.hpp"
 #include "type_marshaler.hpp"
 
@@ -38,19 +39,18 @@ namespace rml::dotnet
 				if (const RBX::Reflection::Tuple* tuple = shared ? shared->get() : nullptr)
 				{
 					for (const auto& value : tuple->values)
-						m_values.push_back(TypeMarshaler::encode_variant(value, &m_strings));
+						m_values.push_back(TypeMarshaler::encode_variant(value, &m_strings, InstanceOwnership::Transferred));
 				}
 				return;
 			}
 
-			m_values.push_back(TypeMarshaler::encode_variant(*result, &m_strings));
+			m_values.push_back(TypeMarshaler::encode_variant(*result, &m_strings, InstanceOwnership::Transferred));
 		}
 
-		void take_error(const RBX::Reflection::Variant* message)
+		void take_error(std::string message)
 		{
 			m_errored = true;
-			if (message && !message->is_void() && message->type().name == "string")
-				m_error_message = *message->try_cast<std::string>();
+			m_error_message = std::move(message);
 		}
 
 		[[nodiscard]] bool errored() const noexcept
@@ -82,50 +82,35 @@ namespace rml::dotnet
 	public:
 		static void dispatch(const RBX::Reflection::YieldFunctionDescriptor& descriptor, RBX::Reflection::DescribedBase& instance, RBX::Reflection::FunctionDescriptor::Arguments& arguments, const ManagedYieldCallback on_complete, void* state)
 		{
-			std::unique_ptr<YieldInvocation> invocation(new YieldInvocation(on_complete, state));
+			std::unique_ptr<YieldInvocation> invocation(new YieldInvocation(instance_handles().retain(&instance), on_complete, state));
 
-			const RBX::Reflection::YieldFunctionDescriptor::Context context{&invocation->m_engine_context, nullptr};
-			descriptor.execute(&instance, arguments, context, &on_resume, &on_error);
+			const std::shared_ptr<RBX::Reflection::YieldFunctionState> yield_state(reinterpret_cast<RBX::Reflection::YieldFunctionState*>(invocation.get()), [](RBX::Reflection::YieldFunctionState*) {});
+			descriptor.execute(&instance, arguments, yield_state, &on_resume, &on_error);
 
 			invocation.release();
 		}
 
 	private:
-		static constexpr std::size_t kYieldEngineScratchBytes = 56;
-
-		struct alignas(16) EngineContext
-		{
-			YieldInvocation* owner{};
-			std::array<std::byte, kYieldEngineScratchBytes> reserved{};
-
-		private:
-			RML_LAYOUT_GUARD_BEGIN()
-				RML_ASSERT_LAYOUT_OFFSET(EngineContext, owner, 0);
-				RML_ASSERT_LAYOUT_OFFSET(EngineContext, reserved, sizeof(YieldInvocation*));
-			RML_LAYOUT_GUARD_END()
-		};
-
-		EngineContext m_engine_context{};
 		YieldResult m_result;
+		std::uintptr_t m_receiver;
 		ManagedYieldCallback m_on_complete;
 		void* m_state;
 
-		YieldInvocation(ManagedYieldCallback on_complete, void* state) noexcept :
+		YieldInvocation(const std::uintptr_t receiver, ManagedYieldCallback on_complete, void* state) noexcept :
+		    m_receiver(receiver),
 		    m_on_complete(on_complete),
 		    m_state(state)
 		{
-			m_engine_context.owner = this;
 		}
 
-		[[nodiscard]] static YieldInvocation* recover_from_engine_context(void* engine_context) noexcept
+	public:
+		~YieldInvocation()
 		{
-			return static_cast<EngineContext*>(engine_context)->owner;
+			if (m_receiver)
+				instance_handles().release(m_receiver);
 		}
 
-		[[nodiscard]] static YieldInvocation* recover_from_error_continuation(void* error_continuation) noexcept
-		{
-			return recover_from_engine_context(*static_cast<void**>(error_continuation));
-		}
+	private:
 
 		void report_and_destroy() noexcept
 		{
@@ -151,12 +136,12 @@ namespace rml::dotnet
 			delete this;
 		}
 
-		static void on_resume(void* continuation, RBX::Reflection::Variant* result) noexcept
+		static void on_resume(RBX::Reflection::YieldFunctionState* state, const RBX::Reflection::Variant& result) noexcept
 		{
-			auto* const self = recover_from_engine_context(continuation);
+			auto* const self = reinterpret_cast<YieldInvocation*>(state);
 			try
 			{
-				self->m_result.take_values(result);
+				self->m_result.take_values(&result);
 			}
 			catch (...)
 			{
@@ -164,12 +149,12 @@ namespace rml::dotnet
 			self->report_and_destroy();
 		}
 
-		static void on_error(void* continuation, RBX::Reflection::Variant* message) noexcept
+		static void on_error(const std::shared_ptr<RBX::Reflection::YieldFunctionState>& state, std::string message) noexcept
 		{
-			auto* const self = recover_from_error_continuation(continuation);
+			auto* const self = reinterpret_cast<YieldInvocation*>(state.get());
 			try
 			{
-				self->m_result.take_error(message);
+				self->m_result.take_error(std::move(message));
 			}
 			catch (...)
 			{

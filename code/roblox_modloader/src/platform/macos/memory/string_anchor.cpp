@@ -1,13 +1,14 @@
-#include "RobloxModLoader/memory/string_anchor.hpp"
+#include "memory/string_anchor_image.hpp"
 
 #include "RobloxModLoader/internal/common.hpp"
+#include "RobloxModLoader/memory/instruction.hpp"
 #include "RobloxModLoader/memory/module.hpp"
 #include "RobloxModLoader/platform/memory/host_image.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <mach-o/loader.h>
-#include <optional>
-#include <string>
+#include <string_view>
 
 namespace rml::memory
 {
@@ -18,6 +19,7 @@ namespace rml::memory
 		std::uintptr_t text_end{};
 		std::uintptr_t image_end{};
 		std::vector<std::uintptr_t> function_starts;
+		std::vector<detail::AddressRange> string_sections;
 	};
 
 	static ImageLayout read_image_layout()
@@ -42,19 +44,22 @@ namespace rml::memory
 			{
 				const auto* segment = reinterpret_cast<const segment_command_64*>(command);
 				const std::string_view name(segment->segname);
+				const auto* section = reinterpret_cast<const section_64*>(segment + 1);
+				for (std::uint32_t s = 0; s < segment->nsects; ++s, ++section)
+				{
+					if (name == "__TEXT" && std::string_view(section->sectname) == "__text")
+					{
+						layout.text_begin = section->addr;
+						layout.text_end = section->addr + section->size;
+					}
+					if ((section->flags & SECTION_TYPE) == S_CSTRING_LITERALS)
+						layout.string_sections.push_back({section->addr, section->addr + section->size});
+				}
+
 				if (name == "__TEXT")
 				{
 					text_vmaddr = segment->vmaddr;
 					slide = layout.base - segment->vmaddr;
-					const auto* section = reinterpret_cast<const section_64*>(segment + 1);
-					for (std::uint32_t s = 0; s < segment->nsects; ++s, ++section)
-					{
-						if (std::string_view(section->sectname) == "__text")
-						{
-							layout.text_begin = section->addr + slide;
-							layout.text_end = layout.text_begin + section->size;
-						}
-					}
 				}
 				else if (name == "__LINKEDIT")
 				{
@@ -69,6 +74,17 @@ namespace rml::memory
 				starts_size = entry->datasize;
 			}
 			command = reinterpret_cast<const load_command*>(reinterpret_cast<const std::byte*>(command) + command->cmdsize);
+		}
+
+		if (layout.text_begin)
+		{
+			layout.text_begin += slide;
+			layout.text_end += slide;
+		}
+		for (auto& [begin, end] : layout.string_sections)
+		{
+			begin += slide;
+			end += slide;
 		}
 
 		if (starts_size && linkedit_vmaddr)
@@ -104,69 +120,54 @@ namespace rml::memory
 		return layout;
 	}
 
-	static std::vector<std::uintptr_t> exact_string_addresses(const ImageLayout& layout, const std::string_view text)
+	static std::optional<std::uintptr_t> page_reference(const std::uintptr_t pc, const std::uint32_t adrp, const std::uint32_t next)
 	{
-		const std::string_view haystack{reinterpret_cast<const char*>(layout.base), layout.image_end - layout.base};
-		std::string needle;
-		needle.push_back('\0');
-		needle.append(text);
-		needle.push_back('\0');
+		if (!instruction::arm64_is_adrp(adrp) || instruction::arm64_rn(next) != instruction::arm64_rd(adrp))
+			return std::nullopt;
 
-		std::vector<std::uintptr_t> found;
-		for (auto position = haystack.find(needle); position != std::string_view::npos; position = haystack.find(needle, position + 1))
-			found.push_back(layout.base + position + 1);
-		return found;
+		const auto offset = instruction::arm64_page_offset(next);
+		if (!offset)
+			return std::nullopt;
+		return instruction::arm64_adrp_page(pc, adrp) + *offset;
 	}
 
-	static std::int64_t adrp_page(const std::uintptr_t pc, const std::uint32_t instruction)
+	bool detail::image_ready()
 	{
-		const std::int64_t immlo = (instruction >> 29) & 0x3;
-		const std::int64_t immhi = (instruction >> 5) & 0x7FFFF;
-		std::int64_t imm = ((immhi << 2) | immlo) << 12;
-		if (imm & (std::int64_t{1} << 32))
-			imm -= std::int64_t{1} << 33;
-		return static_cast<std::int64_t>(pc & ~std::uintptr_t{0xFFF}) + imm;
+		const auto& layout = image_layout();
+		return !layout.function_starts.empty() && layout.text_begin;
 	}
 
-	static std::vector<std::uintptr_t> code_references(const ImageLayout& layout, const std::vector<std::uintptr_t>& targets)
+	detail::AddressRange detail::image_range()
 	{
-		std::vector<std::uintptr_t> references;
+		const auto& layout = image_layout();
+		return {layout.base, layout.image_end};
+	}
+
+	std::span<const detail::AddressRange> detail::string_sections()
+	{
+		return image_layout().string_sections;
+	}
+
+	std::vector<detail::CodeReference> detail::code_references(const std::span<const std::uintptr_t> sorted_targets)
+	{
+		const auto& layout = image_layout();
 		const auto* code = reinterpret_cast<const std::uint32_t*>(layout.text_begin);
 		const std::size_t count = (layout.text_end - layout.text_begin) / 4;
 
+		std::vector<CodeReference> references;
 		for (std::size_t i = 0; i + 1 < count; ++i)
 		{
-			const auto instruction = code[i];
-			if ((instruction & 0x9F000000) != 0x90000000)
-				continue;
-
 			const auto pc = layout.text_begin + i * 4;
-			const auto page = adrp_page(pc, instruction);
-			const auto next = code[i + 1];
-			const auto rd = instruction & 0x1F;
-			const auto rn = (next >> 5) & 0x1F;
-			std::int64_t resolved = -1;
-
-			if ((next & 0xFF800000) == 0x91000000 && rn == rd)
-				resolved = page + ((next >> 10) & 0xFFF);
-			else if ((next & 0x3B000000) == 0x39000000 && rn == rd)
-				resolved = page + (static_cast<std::int64_t>((next >> 10) & 0xFFF) << (next >> 30));
-
-			if (resolved < 0)
-				continue;
-
-			for (const auto target : targets)
-			{
-				if (static_cast<std::uintptr_t>(resolved) == target)
-					references.push_back(pc);
-			}
+			const auto resolved = page_reference(pc, code[i], code[i + 1]);
+			if (resolved && std::ranges::binary_search(sorted_targets, *resolved))
+				references.push_back({pc, *resolved});
 		}
-
 		return references;
 	}
 
-	static std::optional<AnchoredFunction> containing_function(const ImageLayout& layout, const std::uintptr_t address)
+	std::optional<AnchoredFunction> detail::containing_function(const std::uintptr_t address)
 	{
+		const auto& layout = image_layout();
 		if (address < layout.text_begin || address >= layout.text_end)
 			return std::nullopt;
 
@@ -179,41 +180,12 @@ namespace rml::memory
 		return AnchoredFunction{reinterpret_cast<void*>(start), end - start};
 	}
 
-	static std::vector<AnchoredFunction> unique_functions(const ImageLayout& layout, const std::vector<std::uintptr_t>& addresses)
-	{
-		std::vector<AnchoredFunction> result;
-		for (const auto address : addresses)
-		{
-			const auto function = containing_function(layout, address);
-			if (!function)
-				continue;
-			if (std::none_of(result.begin(), result.end(), [&](const AnchoredFunction& f) {
-				    return f.start == function->start;
-			    }))
-				result.push_back(*function);
-		}
-		return result;
-	}
-
-	std::vector<AnchoredFunction> functions_referencing_string(const std::string_view exact_text)
-	{
-		const auto& layout = image_layout();
-		if (layout.function_starts.empty() || !layout.text_begin)
-			return {};
-
-		const auto strings = exact_string_addresses(layout, exact_text);
-		if (strings.empty())
-			return {};
-
-		return unique_functions(layout, code_references(layout, strings));
-	}
-
 	std::vector<AnchoredFunction> functions_calling(const void* target)
 	{
-		const auto& layout = image_layout();
-		if (layout.function_starts.empty() || !layout.text_begin)
+		if (!detail::image_ready())
 			return {};
 
+		const auto& layout = image_layout();
 		const auto wanted = reinterpret_cast<std::uintptr_t>(target);
 		const auto* code = reinterpret_cast<const std::uint32_t*>(layout.text_begin);
 		const std::size_t count = (layout.text_end - layout.text_begin) / 4;
@@ -221,27 +193,53 @@ namespace rml::memory
 		std::vector<std::uintptr_t> sites;
 		for (std::size_t i = 0; i < count; ++i)
 		{
-			const auto instruction = code[i];
-			if ((instruction & 0x7C000000) != 0x14000000)
-				continue;
-
-			std::int64_t imm = instruction & 0x03FFFFFF;
-			if (imm & 0x02000000)
-				imm -= 0x04000000;
-
 			const auto pc = layout.text_begin + i * 4;
-			if (pc + imm * 4 == wanted)
+			if (instruction::arm64_is_branch(code[i]) && instruction::arm64_branch_target(pc, code[i]) == wanted)
 				sites.push_back(pc);
 		}
 
-		return unique_functions(layout, sites);
+		return detail::unique_functions(sites);
 	}
 
-	std::optional<AnchoredFunction> function_containing(const void* address)
+	std::vector<void*> calls_from(const AnchoredFunction& function)
 	{
 		const auto& layout = image_layout();
-		if (layout.function_starts.empty() || !layout.text_begin)
-			return std::nullopt;
-		return containing_function(layout, reinterpret_cast<std::uintptr_t>(address));
+		const auto begin = reinterpret_cast<std::uintptr_t>(function.start);
+		const auto end = begin + function.size;
+		if (layout.function_starts.empty() || begin < layout.text_begin || end > layout.text_end)
+			return {};
+
+		std::vector<void*> targets;
+		const auto* code = reinterpret_cast<const std::uint32_t*>(begin);
+		for (std::size_t i = 0; i < function.size / 4; ++i)
+		{
+			const auto word = code[i];
+			if (!instruction::arm64_is_branch(word))
+				continue;
+
+			const auto target = instruction::arm64_branch_target(begin + i * 4, word);
+			if (!instruction::arm64_is_linked_branch(word) && target >= begin && target < end)
+				continue;
+			if (std::binary_search(layout.function_starts.begin(), layout.function_starts.end(), target))
+				targets.push_back(reinterpret_cast<void*>(target));
+		}
+		return targets;
+	}
+
+	std::vector<void*> data_references_from(const AnchoredFunction& function)
+	{
+		const auto& layout = image_layout();
+		const auto begin = reinterpret_cast<std::uintptr_t>(function.start);
+		if (begin < layout.text_begin || begin + function.size > layout.text_end)
+			return {};
+
+		std::vector<void*> targets;
+		const auto* code = reinterpret_cast<const std::uint32_t*>(begin);
+		for (std::size_t i = 0; i + 1 < function.size / 4; ++i)
+		{
+			if (const auto resolved = page_reference(begin + i * 4, code[i], code[i + 1]))
+				targets.push_back(reinterpret_cast<void*>(*resolved));
+		}
+		return targets;
 	}
 }

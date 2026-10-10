@@ -19,4 +19,6 @@ namespace rml::platform
 {
 	[[nodiscard]] RML_EXPORT std::expected<unsigned long, std::error_code> set_protection(void* address, std::size_t size, utils::MemoryProtection protection);
 	RML_EXPORT void restore_protection(void* address, std::size_t size, unsigned long previous) noexcept;
+	[[nodiscard]] RML_EXPORT bool is_executable(const void* address) noexcept;
+	[[nodiscard]] RML_EXPORT bool is_readable(const void* address, std::size_t size) noexcept;
 }

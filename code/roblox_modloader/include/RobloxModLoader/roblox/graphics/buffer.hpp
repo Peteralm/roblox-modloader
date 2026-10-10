@@ -39,7 +39,7 @@ namespace RBX::Graphics
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
 #if defined(RML_WINDOWS)
 	RML_ASSERT_OFFSET(Buffer, type, 0x40);
-	RML_ASSERT_OFFSET(Buffer, usage, 0x4c);
+	RML_ASSERT_OFFSET(Buffer, usage, 0x4C);
 	RML_ASSERT_SIZE(Buffer, 0x50);
 #else
 	RML_ASSERT_OFFSET(Buffer, type, 0x38);
@@ -59,7 +59,6 @@ namespace RBX::Graphics
 			unsigned semantic;
 			unsigned semantic_index;
 			std::uint8_t per_instance;
-			std::uint8_t reserved_15[3];
 		};
 	};
 
@@ -87,9 +86,12 @@ namespace RBX::Graphics
 		std::uint32_t base_vertex;
 		std::uint32_t count;
 		std::uint32_t instance_count;
-		std::uint16_t reserved_36;
+
+	private:
+		[[maybe_unused]] std::uint16_t reserved_24{};
+
+	public:
 		bool indexed;
-		std::uint8_t reserved_39;
 
 		GeometryBatch() = default;
 
@@ -100,9 +102,7 @@ namespace RBX::Graphics
 		    base_vertex(base_vertex),
 		    count(count),
 		    instance_count(instance_count),
-		    reserved_36(0),
-		    indexed(indexed),
-		    reserved_39(0)
+		    indexed(indexed)
 		{
 		}
 	};

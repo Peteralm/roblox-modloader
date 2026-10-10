@@ -2,6 +2,7 @@
 
 #include "RobloxModLoader/rml_export.hpp"
 #include "RobloxModLoader/roblox/reflection/described_creatable.hpp"
+#include "RobloxModLoader/roblox/reflection/hints.hpp"
 #include "RobloxModLoader/roblox/reflection/property_accessor.hpp"
 
 #include <cstddef>
@@ -10,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 struct lua_State;
@@ -81,6 +83,110 @@ namespace rml::reflection
 		std::string name;
 	};
 
+	struct PropertySpec;
+
+	class RML_EXPORT PropertyOptions
+	{
+	public:
+		PropertyOptions(std::vector<PropertySpec>& properties, std::size_t index);
+
+		void category(std::string_view name) const;
+		void description(std::string_view text) const;
+		void order(int value) const;
+		void read_only() const;
+		void hidden() const;
+		void deprecated(std::string_view message) const;
+		void slider(double min, double max, int ticks, SliderScaling scaling) const;
+		void enum_type(const void* key) const;
+
+	private:
+		PropertySpec& spec() const;
+
+		std::vector<PropertySpec>* m_properties;
+		std::size_t m_index;
+	};
+
+	template<typename Parent, typename T>
+	class PropertyBuilder
+	{
+	public:
+		PropertyBuilder(Parent& parent, const PropertyOptions options) :
+		    m_parent(parent),
+		    m_options(options)
+		{
+		}
+
+		PropertyBuilder& category(const std::string_view name)
+		{
+			m_options.category(name);
+			return *this;
+		}
+
+		PropertyBuilder& description(const std::string_view text)
+		{
+			m_options.description(text);
+			return *this;
+		}
+
+		PropertyBuilder& order(const int value)
+		{
+			m_options.order(value);
+			return *this;
+		}
+
+		PropertyBuilder& read_only()
+		{
+			m_options.read_only();
+			return *this;
+		}
+
+		PropertyBuilder& hidden()
+		{
+			m_options.hidden();
+			return *this;
+		}
+
+		PropertyBuilder& deprecated(const std::string_view message = {})
+		{
+			m_options.deprecated(message);
+			return *this;
+		}
+
+		PropertyBuilder& slider(const T min, const T max, const int ticks = 0, const SliderScaling scaling = SliderScaling::Linear)
+		    requires(std::is_arithmetic_v<T> && !std::is_same_v<T, bool>)
+		{
+			m_options.slider(static_cast<double>(min), static_cast<double>(max), ticks, scaling);
+			return *this;
+		}
+
+		template<typename... Args>
+		decltype(auto) property(Args&&... args)
+		{
+			return m_parent.property(std::forward<Args>(args)...);
+		}
+
+		template<typename... Args>
+		decltype(auto) function(Args&&... args)
+		{
+			return m_parent.function(std::forward<Args>(args)...);
+		}
+
+		template<typename... Args>
+		decltype(auto) event(Args&&... args)
+		{
+			return m_parent.event(std::forward<Args>(args)...);
+		}
+
+		decltype(auto) commit()
+		{
+			return m_parent.commit();
+		}
+
+	private:
+		Parent& m_parent;
+		PropertyOptions m_options;
+	};
+
 	class RML_EXPORT ClassBuilder
 	{
 	public:
@@ -89,9 +195,19 @@ namespace rml::reflection
 		ClassBuilder(ClassBuilder&&) noexcept;
 		ClassBuilder& operator=(ClassBuilder&&) noexcept;
 
-		ClassBuilder& property(std::string_view name, PropertyType type, std::shared_ptr<void> accessor, std::string_view category);
+		ClassBuilder& property(std::string_view name, PropertyType type, std::shared_ptr<void> accessor);
 		ClassBuilder& function(std::string_view name, std::shared_ptr<FunctionInvoker> invoker);
 		ClassBuilder& event(std::string_view name, std::ptrdiff_t member_offset, std::vector<EventArgument> arguments);
+		[[nodiscard]] PropertyOptions last_property();
+
+		ClassBuilder& description(std::string_view text);
+		ClassBuilder& insert_category(std::string_view name);
+		ClassBuilder& explorer_order(int value);
+		ClassBuilder& preferred_parent(std::string_view class_name);
+		ClassBuilder& insertable(bool value);
+		ClassBuilder& browsable(bool value);
+		ClassBuilder& icon_of(std::string_view engine_class);
+
 		const RBX::Reflection::ClassDescriptor* commit();
 
 	private:
@@ -108,8 +224,9 @@ namespace rml::reflection
 		ExtensionBuilder(ExtensionBuilder&&) noexcept;
 		ExtensionBuilder& operator=(ExtensionBuilder&&) noexcept;
 
-		ExtensionBuilder& property(std::string_view name, PropertyType type, std::shared_ptr<void> accessor, std::string_view category);
+		ExtensionBuilder& property(std::string_view name, PropertyType type, std::shared_ptr<void> accessor);
 		ExtensionBuilder& function(std::string_view name, std::shared_ptr<FunctionInvoker> invoker);
+		[[nodiscard]] PropertyOptions last_property();
 		const RBX::Reflection::ClassDescriptor* commit();
 
 	private:
@@ -126,10 +243,12 @@ namespace rml::reflection
 		}
 
 		template<typename T>
-		TypedExtensionBuilder& property(std::string_view name, T (*getter)(Base*), void (*setter)(Base*, const T&), std::string_view category = "Data")
+		PropertyBuilder<TypedExtensionBuilder, T> property(std::string_view name, T (*getter)(Base*), void (*setter)(Base*, const T&))
 		{
-			m_builder.property(name, property_type_of<T>::value, std::make_shared<FunctionGetSet<Base, T>>(getter, setter), category);
-			return *this;
+			m_builder.property(name, property_type_of<T>::value, std::make_shared<FunctionGetSet<Base, T>>(getter, setter));
+			if constexpr (ModEnum<T>)
+				m_builder.last_property().enum_type(enum_key<T>());
+			return PropertyBuilder<TypedExtensionBuilder, T>(*this, m_builder.last_property());
 		}
 
 		TypedExtensionBuilder& function(std::string_view name, int (*function)(Base*, lua_State*))
@@ -156,19 +275,65 @@ namespace rml::reflection
 		{
 		}
 
-		template<typename T>
-		TypedClassBuilder& property(std::string_view name, T Derived::* member, std::string_view category = "Data")
+		TypedClassBuilder& description(const std::string_view text)
 		{
-			m_builder.property(name, property_type_of<T>::value, std::make_shared<MemberGetSet<Derived, T>>(member), category);
+			m_builder.description(text);
 			return *this;
 		}
 
+		TypedClassBuilder& insert_category(const std::string_view name)
+		{
+			m_builder.insert_category(name);
+			return *this;
+		}
+
+		TypedClassBuilder& explorer_order(const int value)
+		{
+			m_builder.explorer_order(value);
+			return *this;
+		}
+
+		TypedClassBuilder& preferred_parent(const std::string_view class_name)
+		{
+			m_builder.preferred_parent(class_name);
+			return *this;
+		}
+
+		TypedClassBuilder& insertable(const bool value)
+		{
+			m_builder.insertable(value);
+			return *this;
+		}
+
+		TypedClassBuilder& browsable(const bool value)
+		{
+			m_builder.browsable(value);
+			return *this;
+		}
+
+		TypedClassBuilder& icon_of(const std::string_view engine_class)
+		{
+			m_builder.icon_of(engine_class);
+			return *this;
+		}
+
+		template<typename T>
+		PropertyBuilder<TypedClassBuilder, T> property(std::string_view name, T Derived::* member)
+		{
+			m_builder.property(name, property_type_of<T>::value, std::make_shared<MemberGetSet<Derived, T>>(member));
+			if constexpr (ModEnum<T>)
+				m_builder.last_property().enum_type(enum_key<T>());
+			return PropertyBuilder<TypedClassBuilder, T>(*this, m_builder.last_property());
+		}
+
 		template<typename Getter, typename Setter>
-		TypedClassBuilder& property(std::string_view name, Getter getter, Setter setter, std::string_view category = "Data")
+		auto property(std::string_view name, Getter getter, Setter setter)
 		{
 			using T = std::remove_cvref_t<std::invoke_result_t<Getter, const Derived&>>;
-			m_builder.property(name, property_type_of<T>::value, std::make_shared<MethodGetSet<Derived, T, Getter, Setter>>(getter, setter), category);
-			return *this;
+			m_builder.property(name, property_type_of<T>::value, std::make_shared<MethodGetSet<Derived, T, Getter, Setter>>(getter, setter));
+			if constexpr (ModEnum<T>)
+				m_builder.last_property().enum_type(enum_key<T>());
+			return PropertyBuilder<TypedClassBuilder, T>(*this, m_builder.last_property());
 		}
 
 		TypedClassBuilder& function(std::string_view name, int (Derived::*method)(lua_State*))

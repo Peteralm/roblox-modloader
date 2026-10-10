@@ -1,17 +1,20 @@
 #include "graphics_registry.hpp"
 
-#include "RobloxModLoader/hooking/vtable_index.hpp"
+#include "RobloxModLoader/memory/vtable.hpp"
 #include "RobloxModLoader/internal/common.hpp"
-#include "RobloxModLoader/memory/i_rtti_provider.hpp"
+#include "RobloxModLoader/memory/instruction.hpp"
+#include "RobloxModLoader/memory/rtti_index.hpp"
 #include "RobloxModLoader/memory/module.hpp"
 #include "RobloxModLoader/memory/string_anchor.hpp"
 #include "RobloxModLoader/platform/memory/host_image.hpp"
+#include "RobloxModLoader/platform/memory/memory_protection.hpp"
 #include "RobloxModLoader/roblox/graphics/adorn_render.hpp"
 #include "RobloxModLoader/roblox/graphics/device.hpp"
+#include "RobloxModLoader/roblox/graphics/device_context.hpp"
 #include "RobloxModLoader/roblox/graphics/shader_manager.hpp"
+#include "RobloxModLoader/util/string.hpp"
 
 #include <algorithm>
-#include <cctype>
 
 RML_LOG_SCOPE("Graphics");
 
@@ -19,17 +22,7 @@ namespace rml::graphics
 {
 	static constexpr unsigned k_max_callback_failures = 2;
 	static constexpr std::size_t k_min_detour_target_size = 32;
-
-	static bool printable(const std::string& text)
-	{
-		return !text.empty() && text.size() < 64
-		    && std::all_of(
-		        text.begin(),
-		        text.end(),
-		        [](const unsigned char c) {
-			        return std::isprint(c);
-		        });
-	}
+	static constexpr std::uint64_t k_adorn_stale_frames = 8;
 
 	GraphicsRegistry& GraphicsRegistry::instance()
 	{
@@ -61,47 +54,26 @@ namespace rml::graphics
 
 	void GraphicsRegistry::set_visual_engine(RBX::Graphics::VisualEngine* engine)
 	{
+		m_device.store(engine ? engine->device : nullptr, std::memory_order_release);
 		if (m_visual_engine.exchange(engine, std::memory_order_acq_rel) != engine)
 			RML_INFO("VisualEngine captured at 0x{:X} (device 0x{:X})",
 			    reinterpret_cast<std::uintptr_t>(engine),
 			    reinterpret_cast<std::uintptr_t>(engine ? engine->device : nullptr));
 	}
 
-	void GraphicsRegistry::add_render_callback(RenderCallback callback)
+	void GraphicsRegistry::advance_frame()
 	{
-		std::lock_guard lock(m_callbacks_mutex);
-		m_callbacks.push_back({std::move(callback), 0});
+		m_frame.fetch_add(1, std::memory_order_acq_rel);
 	}
 
-	void GraphicsRegistry::run_render_callbacks(RenderPassContext& context)
+	void GraphicsRegistry::on_device_destroyed(RBX::Graphics::Device* device)
 	{
-		std::lock_guard lock(m_callbacks_mutex);
-		for (auto it = m_callbacks.begin(); it != m_callbacks.end();)
+		auto* expected = device;
+		if (m_device.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel))
 		{
-			try
-			{
-				it->callback(context);
-				++it;
-				continue;
-			}
-			catch (const std::exception& e)
-			{
-				RML_ERROR("render callback threw: {}", e.what());
-			}
-			catch (...)
-			{
-				RML_ERROR("render callback threw an unknown exception");
-			}
-
-			if (++it->failures >= k_max_callback_failures)
-			{
-				RML_ERROR("render callback removed after {} failures", it->failures);
-				it = m_callbacks.erase(it);
-			}
-			else
-			{
-				++it;
-			}
+			m_visual_engine.store(nullptr, std::memory_order_release);
+			m_scene_manager.store(nullptr, std::memory_order_release);
+			RML_INFO("Device 0x{:X} destroyed", reinterpret_cast<std::uintptr_t>(device));
 		}
 	}
 
@@ -113,15 +85,10 @@ namespace rml::graphics
 
 	void GraphicsRegistry::run_adorn_callbacks(RBX::Graphics::AdornRender& adorn)
 	{
-		// Studio runs one adorn pass per view, each with its own AdornRender, so the pointer
-		// alternates every frame; announce only the first capture.
-		if (m_adorn_render.exchange(&adorn, std::memory_order_acq_rel) == nullptr)
-			RML_INFO("AdornRender captured at 0x{:X} ({}x{})",
-			    reinterpret_cast<std::uintptr_t>(&adorn),
-			    adorn.viewport_width,
-			    adorn.viewport_height);
+		track_adorn_render(adorn);
 
 		std::lock_guard lock(m_callbacks_mutex);
+
 		for (auto it = m_adorn_callbacks.begin(); it != m_adorn_callbacks.end();)
 		{
 			try
@@ -151,21 +118,125 @@ namespace rml::graphics
 		}
 	}
 
-	RBX::Graphics::AdornRender* GraphicsRegistry::adorn_render() const
+	void GraphicsRegistry::track_adorn_render(RBX::Graphics::AdornRender& adorn)
 	{
-		return m_adorn_render.load(std::memory_order_acquire);
+		const auto frame = m_frame.load(std::memory_order_acquire);
+		const auto area = adorn.viewport_width * adorn.viewport_height;
+		std::lock_guard lock(m_adorn_mutex);
+		const auto it = std::ranges::find(m_adorn_renders, &adorn, &AdornEntry::adorn);
+		if (it != m_adorn_renders.end())
+		{
+			it->last_frame = frame;
+			it->area = area;
+			return;
+		}
+
+		m_adorn_renders.push_back({&adorn, frame, area});
+		RML_INFO("AdornRender captured at 0x{:X} ({}x{}), {} active",
+		    reinterpret_cast<std::uintptr_t>(&adorn),
+		    adorn.viewport_width,
+		    adorn.viewport_height,
+		    m_adorn_renders.size());
+	}
+
+	std::vector<RBX::Graphics::AdornRender*> GraphicsRegistry::adorn_renders()
+	{
+		const auto frame = m_frame.load(std::memory_order_acquire);
+		std::lock_guard lock(m_adorn_mutex);
+		std::erase_if(m_adorn_renders, [frame](const AdornEntry& entry) {
+			return entry.last_frame + k_adorn_stale_frames < frame;
+		});
+
+		auto entries = m_adorn_renders;
+		std::ranges::stable_sort(entries, std::greater{}, &AdornEntry::area);
+
+		std::vector<RBX::Graphics::AdornRender*> result;
+		result.reserve(entries.size());
+		for (const auto& entry : entries)
+			result.push_back(entry.adorn);
+		return result;
+	}
+
+	RBX::Graphics::AdornRender* GraphicsRegistry::adorn_render()
+	{
+		const auto renders = adorn_renders();
+		return renders.empty() ? nullptr : renders.front();
+	}
+
+	static void* follow_thunk(void* target)
+	{
+#if defined(RML_MACOS)
+		const auto word = *static_cast<const std::uint32_t*>(target);
+		if (memory::instruction::arm64_is_branch(word) && !memory::instruction::arm64_is_linked_branch(word))
+			return reinterpret_cast<void*>(memory::instruction::arm64_branch_target(reinterpret_cast<std::uintptr_t>(target), word));
+#endif
+		return target;
+	}
+
+	void* device_destructor_target()
+	{
+		auto* const index = memory::rtti();
+		if (!index)
+			return nullptr;
+
+		const memory::module image(platform::studio_image_name());
+		for (const auto* name : {"RBX::Graphics::DeviceD3D11", "RBX::Graphics::DeviceMtl"})
+		{
+			const auto vtable = index->find(name);
+			if (!vtable)
+				continue;
+
+			auto* target = (*vtable)[platform::abi::destructor_body_slot];
+			if (image.contains(memory::handle(target)))
+				target = follow_thunk(target);
+			const auto function = image.contains(memory::handle(target)) ? memory::function_containing(target) : std::nullopt;
+			if (!function || function->start != target || function->size < k_min_detour_target_size)
+			{
+				RML_ERROR("{} destructor is not detourable", name);
+				return nullptr;
+			}
+			return target;
+		}
+		return nullptr;
+	}
+
+	void* device_context_begin_pass_target()
+	{
+		auto* const index = memory::rtti();
+		if (!index)
+			return nullptr;
+
+		const memory::module image(platform::studio_image_name());
+		const auto slot = memory::virtual_index(&RBX::Graphics::DeviceContext::begin_pass);
+		for (const auto* name : {"RBX::Graphics::DeviceContextD3D11", "RBX::Graphics::DeviceContextMtl"})
+		{
+			const auto vtable = index->find(name);
+			if (!vtable)
+				continue;
+
+			auto* target = (*vtable)[slot];
+			const auto function = image.contains(memory::handle(target)) ? memory::function_containing(target) : std::nullopt;
+			if (!function || function->start != target || function->size < k_min_detour_target_size)
+			{
+				RML_ERROR("{} vtable slot {} is not detourable", name, slot);
+				return nullptr;
+			}
+			return target;
+		}
+		return nullptr;
 	}
 
 	void* adorn_render_pre_submit_pass_target()
 	{
-		if (!g_rtti_provider)
+		auto* const index = memory::rtti();
+		if (!index)
 			return nullptr;
 
-		const auto vtable = g_rtti_provider->find_class_vtable("RBX::Graphics::AdornRender");
+		const auto vtable = index->find("RBX::Graphics::AdornRender");
 		if (!vtable)
 			return nullptr;
 
-		const auto slot = vtable_index_of(&RBX::Adorn::pre_submit_pass);
+		const auto slot = memory::virtual_index(&RBX::Adorn::pre_submit_pass);
 		const memory::module image(platform::studio_image_name());
 		auto* target = (*vtable)[slot];
 		if (!image.contains(memory::handle(target)))
@@ -197,17 +268,17 @@ namespace rml::graphics
 			}
 
 			const memory::module image(platform::studio_image_name());
-			auto** vtable = *reinterpret_cast<void***>(device);
-			const auto slots = vtable_index_of(&RBX::Graphics::Device::create_texture_with_hardware_buffer_impl, RBX::Graphics::Texture::Type::Type_2D, RBX::Graphics::Texture::Format::RGBA8, 0u, 0u, 0u, 0u, 0u, 0u, RBX::Graphics::Texture::Usage::Static, std::string{}, nullptr) + 1;
+			auto** vtable = memory::vtable_of(device);
+			const auto slots = memory::virtual_index(&RBX::Graphics::Device::create_texture_with_hardware_buffer_impl) + 1;
 			for (std::size_t slot = 0; slot < slots; ++slot)
 			{
-				if (!image.contains(memory::handle(vtable[slot])))
+				if (!image.contains(memory::handle(vtable[slot])) || !platform::is_executable(vtable[slot]))
 				{
 					RML_ERROR("graphics surface disabled: Device vtable slot {} is not code", slot);
 					return false;
 				}
 			}
-			if (image.contains(memory::handle(vtable[slots])))
+			if (platform::is_executable(vtable[slots]))
 			{
 				RML_ERROR("graphics surface disabled: Device vtable has more than {} slots", slots);
 				return false;
@@ -215,7 +286,7 @@ namespace rml::graphics
 
 			const auto language = device->get_shading_language();
 			const auto level = device->get_feature_level();
-			if (!printable(language) || !printable(level))
+			if (!utils::is_printable(language, 64) || !utils::is_printable(level, 64))
 			{
 				RML_ERROR("graphics surface disabled: Device strings are not printable");
 				return false;
@@ -269,8 +340,8 @@ namespace rml::graphics
 		return GraphicsRegistry::instance().adorn_render();
 	}
 
-	void add_render_callback(RenderCallback callback)
+	std::vector<RBX::Graphics::AdornRender*> adorn_renders()
 	{
-		GraphicsRegistry::instance().add_render_callback(std::move(callback));
+		return GraphicsRegistry::instance().adorn_renders();
 	}
 }

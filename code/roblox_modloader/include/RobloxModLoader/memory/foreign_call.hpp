@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RobloxModLoader/internal/platform.hpp"
+#include "RobloxModLoader/platform/abi.hpp"
 
 #include <cstddef>
 #include <cstring>
@@ -10,7 +10,7 @@
 namespace rml::memory
 {
 	template<typename T>
-	concept IndirectlyReturnable = std::is_trivially_copyable_v<T>;
+	concept IndirectlyReturnable = std::is_object_v<T> && !std::is_array_v<T>;
 
 	template<typename... T>
 	concept ForeignArguments = (std::is_trivially_copyable_v<T> && ...);
@@ -41,14 +41,33 @@ namespace rml::memory
 		if (!fn)
 			return;
 
-#if defined(RML_WINDOWS)
-		reinterpret_cast<void (*)(void*, Args...)>(fn)(std::addressof(result), args...);
-#else
-		using Slot = detail::IndirectResult<sizeof(Result)>;
+		if constexpr (platform::abi::returns_via_hidden_pointer)
+		{
+			reinterpret_cast<void (*)(void*, Args...)>(fn)(std::addressof(result), args...);
+		}
+		else
+		{
+			using Slot = detail::IndirectResult<sizeof(Result)>;
 
-		const Slot value = reinterpret_cast<Slot (*)(Args...)>(fn)(args...);
-		std::memcpy(std::addressof(result), value.m_storage, sizeof(Result));
-#endif
+			const Slot value = reinterpret_cast<Slot (*)(Args...)>(fn)(args...);
+			std::memcpy(static_cast<void*>(std::addressof(result)), value.m_storage, sizeof(Result));
+		}
+	}
+
+	template<typename Result, typename Self, typename... Args>
+	    requires ForeignArguments<Result, Self, Args...>
+	Result call_member(void* fn, Self self, Args... args)
+	{
+		if constexpr (platform::abi::returns_via_hidden_pointer)
+		{
+			Result result{};
+			reinterpret_cast<void (*)(Self, Result*, Args...)>(fn)(self, std::addressof(result), args...);
+			return result;
+		}
+		else
+		{
+			return reinterpret_cast<Result (*)(Self, Args...)>(fn)(self, args...);
+		}
 	}
 
 	template<IndirectlyReturnable Result, typename Self, typename... Args>
@@ -58,13 +77,16 @@ namespace rml::memory
 		if (!fn)
 			return;
 
-#if defined(RML_WINDOWS)
-		reinterpret_cast<void (*)(Self, void*, Args...)>(fn)(self, std::addressof(result), args...);
-#else
-		using Slot = detail::IndirectResult<sizeof(Result)>;
+		if constexpr (platform::abi::returns_via_hidden_pointer)
+		{
+			reinterpret_cast<void (*)(Self, void*, Args...)>(fn)(self, std::addressof(result), args...);
+		}
+		else
+		{
+			using Slot = detail::IndirectResult<sizeof(Result)>;
 
-		const Slot value = reinterpret_cast<Slot (*)(Self, Args...)>(fn)(self, args...);
-		std::memcpy(std::addressof(result), value.m_storage, sizeof(Result));
-#endif
+			const Slot value = reinterpret_cast<Slot (*)(Self, Args...)>(fn)(self, args...);
+			std::memcpy(static_cast<void*>(std::addressof(result)), value.m_storage, sizeof(Result));
+		}
 	}
 }

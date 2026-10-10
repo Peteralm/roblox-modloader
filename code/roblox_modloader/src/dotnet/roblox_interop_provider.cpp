@@ -1,11 +1,13 @@
 
 #include "RobloxModLoader/memory/foreign_call.hpp"
+#include "RobloxModLoader/platform/abi.hpp"
 #include "roblox_interop_provider.hpp"
 
 #include "pointers.hpp"
 
 #include "RobloxModLoader/logger/logger.hpp"
 #include "RobloxModLoader/roblox/data_model.hpp"
+#include "RobloxModLoader/roblox/reflection/creatable.hpp"
 #include "RobloxModLoader/roblox/reflection/function_descriptor.hpp"
 #include "RobloxModLoader/roblox/task_scheduler.hpp"
 #include "RobloxModLoader/util/memory.hpp"
@@ -13,6 +15,7 @@
 #include "dotnet_event_descriptor.hpp"
 #include "dotnet_variant.hpp"
 #include "dotnet_yield.hpp"
+#include "instance_handles.hpp"
 #include "type_marshaler.hpp"
 
 #include <RobloxModLoader/qt/mods_menu.hpp>
@@ -21,7 +24,9 @@
 #include <RobloxModLoader/roblox/reflection/object.hpp>
 #include <RobloxModLoader/roblox/reflection/property_descriptor.hpp>
 #include <cassert>
+#include <mutex>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 
 #if RML_ENABLE_LUAU
@@ -67,6 +72,8 @@ namespace rml::dotnet
 		    {reinterpret_cast<const void*>(table.luau_ref_call), "luau_ref_call"},
 		    {reinterpret_cast<const void*>(table.luau_ref_index), "luau_ref_index"},
 		    {reinterpret_cast<const void*>(table.luau_ref_release), "luau_ref_release"},
+		    {reinterpret_cast<const void*>(table.instance_retain), "instance_retain"},
+		    {reinterpret_cast<const void*>(table.instance_release), "instance_release"},
 		};
 
 		for (const auto& [pointer, name] : members)
@@ -105,16 +112,19 @@ namespace rml::dotnet
 		const auto type = descriptor.get_signature().first_result_type();
 		const bool indirect_result = TypeMarshaler::returns_indirectly(type);
 
-		const auto ret = function.invoke(arguments, indirect_result);
+		RBX::Function::ReturnStorage result{};
+		const auto ret = function.invoke(arguments, indirect_result, result);
+		if constexpr (platform::abi::callee_destroys_arguments)
+			arguments.hand_over_by_value_arguments();
 
-		TypeMarshaler::encode_return_value(type, ret, reinterpret_cast<uintptr_t>(&arguments.return_value), out);
+		TypeMarshaler::encode_return_value(type, ret, result.bytes, out);
 	}
 
 	RBX::Reflection::EventArguments build_event_fire_args(const RBX::Reflection::EventDescriptor* descriptor, const InteropVariant* args, const uint32_t arg_count)
 	{
 		RBX::Reflection::EventArguments event_args;
 		const auto& signature = descriptor->get_signature();
-		const auto sig_args = signature.arguments();
+		const auto& sig_args = signature.arguments;
 
 		if (sig_args.size() == 1 && sig_args[0].type && sig_args[0].type->type_id == RBX::Reflection::TypeId::Tuple)
 		{
@@ -395,30 +405,15 @@ namespace rml::dotnet
 
 			try
 			{
-				const auto atom = g_pointers->m_roblox_pointers.get_string_atom(class_name);
-
-				struct CreatedInstance
-				{
-					uintptr_t instance;
-					uintptr_t control_block;
-				};
-
-				CreatedInstance created{};
-				memory::call_returning<CreatedInstance>(
-				    reinterpret_cast<void*>(g_pointers->m_roblox_pointers.object_create_by_name),
-				    created,
-				    uintptr_t{0},
-				    static_cast<uintptr_t>(atom),
-				    static_cast<uint32_t>(creator_role));
-
-				const auto out = created.instance;
-				if (!out)
+				const auto* name = g_pointers->m_roblox_pointers.get_string_atom(class_name);
+				auto instance = g_pointers->m_roblox_pointers.object_create_by_name(nullptr, *name, static_cast<RBX::CreatorRole>(creator_role));
+				if (!instance)
 				{
 					RML_ERROR("creator_create_by_name('{}') failed: null instance", class_name);
 					return 0;
 				}
 
-				return out;
+				return instance_handles().retain(std::move(instance));
 			}
 			catch (const std::exception& e)
 			{
@@ -430,6 +425,23 @@ namespace rml::dotnet
 				RML_ERROR("create_by_name('{}') failed: unknown exception", class_name);
 				return 0;
 			}
+		};
+
+		table.instance_retain = [](const uintptr_t instance) -> uint8_t {
+			try
+			{
+				return instance_handles().retain(instance) ? 1 : 0;
+			}
+			catch (const std::exception& e)
+			{
+				RML_ERROR("instance_retain failed: {}", e.what());
+				return 0;
+			}
+		};
+
+		table.instance_release = [](const uintptr_t instance) {
+			if (instance)
+				instance_handles().release(instance);
 		};
 
 		table.managed_log = [](const int32_t level, const char* utf8, const int32_t len) {
@@ -585,7 +597,7 @@ namespace rml::dotnet
 					return nullptr;
 
 				for (size_t i = 0; i < snapshot.size(); ++i)
-					result[i] = reinterpret_cast<uintptr_t>(new RBX::Signals::Connection(std::move(snapshot[i])));
+					result[i] = reinterpret_cast<uintptr_t>(new rbx::signals::connection(std::move(snapshot[i])));
 
 				if (out_count)
 					*out_count = static_cast<uint32_t>(snapshot.size());
@@ -600,15 +612,15 @@ namespace rml::dotnet
 		table.event_slot_fire = [](const uintptr_t instance_ptr, const char* event_name, const uintptr_t slot_handle, const InteropVariant* args, const uint32_t arg_count) {
 			try
 			{
-				const auto* connection = reinterpret_cast<RBX::Signals::Connection*>(slot_handle);
+				const auto* connection = reinterpret_cast<rbx::signals::connection*>(slot_handle);
 				if (!connection)
 					return;
 
 				const auto* slot = connection->raw_slot();
-				if (!slot || !slot->source)
+				if (!slot || !slot->holder)
 					return;
 
-				auto* wrapper = static_cast<RBX::Reflection::GenericSlotWrapper*>(slot->wrapper_ptr);
+				auto* wrapper = static_cast<const rbx::signals::slot_with_functor<RBX::Reflection::GenericSlotFunctor>*>(slot)->functor.wrapper.get();
 				if (!wrapper)
 					return;
 
@@ -633,12 +645,12 @@ namespace rml::dotnet
 		};
 
 		table.event_slot_disconnect = [](const uintptr_t slot_handle) {
-			if (const auto* connection = reinterpret_cast<RBX::Signals::Connection*>(slot_handle))
+			if (const auto* connection = reinterpret_cast<rbx::signals::connection*>(slot_handle))
 				connection->disconnect();
 		};
 
 		table.event_slot_release = [](const uintptr_t slot_handle) {
-			delete reinterpret_cast<RBX::Signals::Connection*>(slot_handle);
+			delete reinterpret_cast<rbx::signals::connection*>(slot_handle);
 		};
 
 		table.luau_host_ready = [](const int32_t data_model_type) -> int32_t {

@@ -1,9 +1,11 @@
 #pragma once
 
+#include "RobloxModLoader/qt/qarray_data.hpp"
 #include "RobloxModLoader/rml_export.hpp"
 
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace rml::qt
 {
@@ -19,22 +21,15 @@ namespace rml::qt
 		~QString();
 
 		QString(const QString&) = delete;
+		QString(QString&& other) noexcept :
+		    d(std::exchange(other.d, nullptr))
+		{
+		}
 
 		QString& operator=(const QString&) = delete;
 
-		[[nodiscard]] const void* data() const
-		{
-			return &m_storage;
-		}
-
-		[[nodiscard]] void* storage()
-		{
-			return &m_storage;
-		}
-
 		[[nodiscard]] std::string to_utf8() const;
 
-	private:
-		void* m_storage = nullptr;
+		QArrayData* d{};
 	};
 }

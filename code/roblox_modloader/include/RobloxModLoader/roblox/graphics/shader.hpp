@@ -21,7 +21,6 @@ namespace RBX::Graphics
 		virtual void reload(const std::vector<char>& bytecode) = 0;
 
 		std::uint32_t type;
-		std::uint32_t reserved_3c;
 	};
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
@@ -51,9 +50,9 @@ namespace RBX::Graphics
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
 #if defined(RML_WINDOWS)
-	RML_ASSERT_OFFSET(ShaderProgram, shaders, 0x40);
-	RML_ASSERT_OFFSET(ShaderProgram, buffer_mask, 0x70);
-	RML_ASSERT_SIZE(ShaderProgram, 0x78);
+	RML_ASSERT_OFFSET(ShaderProgram, shaders, 64);
+	RML_ASSERT_OFFSET(ShaderProgram, buffer_mask, 112);
+	RML_ASSERT_SIZE(ShaderProgram, 120);
 #else
 	RML_ASSERT_OFFSET(ShaderProgram, shaders, 56);
 	RML_ASSERT_OFFSET(ShaderProgram, buffer_mask, 104);

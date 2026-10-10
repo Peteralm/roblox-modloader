@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RobloxModLoader/roblox/rsl/array_view.hpp"
 #include "RobloxModLoader/roblox/signals.hpp"
 #include "RobloxModLoader/roblox/util/Extents.h"
 #include "RobloxModLoader/roblox/util/G3DCore.h"
@@ -14,16 +15,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
-
-namespace RSL
-{
-	template<typename T>
-	struct ArrayView
-	{
-		const T* data;
-		std::size_t size;
-	};
-}
 
 namespace RBX
 {
@@ -124,6 +115,7 @@ namespace RBX
 			Pass_Blend,
 			Pass_AlwaysOnTop,
 			Pass_Composite,
+			Pass_Reserved7,
 			Pass_Count
 		};
 
@@ -147,6 +139,8 @@ namespace RBX
 		virtual TextureProxyBaseRef create_future_texture_proxy(const ContentId& id, bool& waiting, const InstanceIdentifier& owner, bool blocking) = 0;
 		virtual void garbage_collect_incremental() = 0;
 		virtual void request_or_update_ui_rt(const std::shared_ptr<GfxGui>& gui, const RenderTargetConfiguration& configuration) = 0;
+		virtual void register_gfx_gui(const std::shared_ptr<GfxGui>& gui) = 0;
+		virtual void* get_rtt_event_queue() = 0;
 		virtual rbx::signal<void()>& get_unbind_resources_signal() = 0;
 		virtual void prepare_render_pass() = 0;
 		virtual void finish_render_pass() = 0;
@@ -196,10 +190,8 @@ namespace RBX
 		Vector4 user_gui_inset;
 		bool vr;
 		bool ignore_texture;
-		std::uint16_t reserved_26;
 		Material current_material;
 		std::int32_t no_distance_culling;
-		std::uint32_t reserved_36;
 		std::shared_ptr<GfxGui> current_gui;
 		std::vector<std::shared_ptr<GfxGui>> gui_list;
 		std::unordered_map<void*, std::shared_ptr<GfxGui>> gui_map;
@@ -259,8 +251,8 @@ namespace RBX
 	RML_ASSERT_OFFSET(Adorn, gui_list, 56);
 	RML_ASSERT_OFFSET(Adorn, gui_map, 80);
 #if defined(RML_WINDOWS)
-	RML_ASSERT_OFFSET(Adorn, scratch_begin, 0x90);
-	RML_ASSERT_SIZE(Adorn, 0xa8);
+	RML_ASSERT_OFFSET(Adorn, scratch_begin, 144);
+	RML_ASSERT_SIZE(Adorn, 168);
 #else
 	RML_ASSERT_OFFSET(Adorn, scratch_begin, 120);
 	RML_ASSERT_SIZE(Adorn, 144);

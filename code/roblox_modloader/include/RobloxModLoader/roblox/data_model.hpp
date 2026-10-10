@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RobloxModLoader/roblox/data_model_type.hpp"
 #include "RobloxModLoader/util/layout_assert.hpp"
 #include "data_model_prop.hpp"
 #include "data_model_serialize.hpp"
@@ -115,7 +116,7 @@ namespace RBX
 		std::unique_ptr<SerializedExternalRefs> serialized_external_refs;
 
 	private:
-		boost::intrusive_ptr<rbx::signals::slots_holder> reserved_slots_0[18];
+		[[maybe_unused]] boost::intrusive_ptr<rbx::signals::slots_holder> reserved_slots_0[18];
 
 	public:
 		RSL::Mutex page_milestone_mutex;
@@ -123,19 +124,25 @@ namespace RBX
 		    page_milestone_registry;
 
 	private:
-		boost::intrusive_ptr<rbx::signals::slots_holder> reserved_slots_1[12];
+		[[maybe_unused]] boost::intrusive_ptr<rbx::signals::slots_holder> reserved_slots_1[12];
 
 	public:
 		std::shared_ptr<IDataModelSerialize> data_model_serialize;
 
 	private:
-		std::byte reserved_before_type[0x48];
+		[[maybe_unused]] DataModel* reserved_4f0;
+		[[maybe_unused]] double reserved_4f8;
+		[[maybe_unused]] std::uint32_t reserved_500;
+		[[maybe_unused]] double reserved_508;
+		[[maybe_unused]] void* reserved_510;
+		[[maybe_unused]] std::uint64_t reserved_518[3];
+		[[maybe_unused]] double reserved_530;
 
 	public:
 		DataModelType type;
 
 	private:
-		std::uint16_t reserved_after_type;
+		[[maybe_unused]] std::uint16_t reserved_53c;
 
 	public:
 		VerbContainer* verb_container;
@@ -145,21 +152,21 @@ namespace RBX
 
 	RML_LAYOUT_DIAGNOSTIC_PUSH()
 #if defined(RML_WINDOWS)
-	RML_ASSERT_OFFSET(DataModel, workspace, 0x350);
+	RML_ASSERT_OFFSET(DataModel, workspace, 0x368);
+	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3D0);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x468);
+	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x470);
+	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x510);
+	RML_ASSERT_OFFSET(DataModel, type, 0x568);
+	RML_ASSERT_OFFSET(DataModel, verb_container, 0x570);
+#else
+	RML_ASSERT_OFFSET(DataModel, workspace, 0x358);
 	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3B8);
 	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x450);
 	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x458);
-	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4F8);
-	RML_ASSERT_OFFSET(DataModel, type, 0x550);
-	RML_ASSERT_OFFSET(DataModel, verb_container, 0x558);
-#else
-	RML_ASSERT_OFFSET(DataModel, workspace, 0x340);
-	RML_ASSERT_OFFSET(DataModel, serialized_external_refs, 0x3A0);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_mutex, 0x438);
-	RML_ASSERT_OFFSET(DataModel, page_milestone_registry, 0x440);
-	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4C8);
-	RML_ASSERT_OFFSET(DataModel, type, 0x520);
-	RML_ASSERT_OFFSET(DataModel, verb_container, 0x528);
+	RML_ASSERT_OFFSET(DataModel, data_model_serialize, 0x4E0);
+	RML_ASSERT_OFFSET(DataModel, type, 0x538);
+	RML_ASSERT_OFFSET(DataModel, verb_container, 0x540);
 #endif
 	RML_LAYOUT_DIAGNOSTIC_POP()
 }

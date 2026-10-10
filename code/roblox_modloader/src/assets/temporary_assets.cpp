@@ -4,6 +4,7 @@
 #include "RobloxModLoader/memory/foreign_call.hpp"
 #include "RobloxModLoader/memory/string_anchor.hpp"
 #include "RobloxModLoader/roblox/subsystem.hpp"
+#include "RobloxModLoader/util/filesystem.hpp"
 
 #include <cstring>
 #include <format>
@@ -22,11 +23,6 @@ namespace rml::assets
 	static constexpr std::string_view k_files_mutex_name = "TemporaryIdsForFilenames";
 	static constexpr std::string_view k_temporary_id_format = "rbxtemp://%lld";
 	static constexpr std::size_t k_startup_chain_depth = 4;
-
-	struct ContentIdBits
-	{
-		alignas(RBX::ContentId) std::byte bytes[sizeof(RBX::ContentId)];
-	};
 
 	struct EngineFunctions
 	{
@@ -124,8 +120,7 @@ namespace rml::assets
 			return std::unexpected("temporary id factory startup returned no instance");
 
 		functions.factory = handle->instance;
-		if (!functions.factory->name || std::string_view(functions.factory->name) != k_factory_name
-		    || functions.factory->name_length != k_factory_name.size())
+		if (!functions.factory->name.data || functions.factory->name.view() != k_factory_name)
 			return std::unexpected("temporary id factory instance failed validation");
 
 		RML_INFO("ContentProviderTemporaryIdFactory at 0x{:X} (startup 0x{:X}, registerTemporaryIdForFile 0x{:X}, {} file ids, {} buffer ids)",
@@ -168,11 +163,8 @@ namespace rml::assets
 		const std::string native = absolute.string();
 		const auto before = functions->factory->files.size();
 
-		ContentIdBits bits{};
-		memory::call_returning_member<ContentIdBits>(functions->register_temporary_id_for_file, bits, functions->factory, &native);
-
 		RBX::ContentId id;
-		std::memcpy(static_cast<void*>(&id), bits.bytes, sizeof(bits));
+		memory::call_returning_member(functions->register_temporary_id_for_file, id, functions->factory, &native);
 
 		if (!id.is_temporary() || functions->factory->files.size() != before + 1)
 			return std::unexpected(std::format("registerTemporaryIdForFile returned '{}' ({} -> {} file ids)",
@@ -186,13 +178,8 @@ namespace rml::assets
 
 	std::expected<RBX::ContentId, std::string> register_bytes(const std::filesystem::path& cache_file, const void* data, const std::size_t size)
 	{
-		std::error_code error;
-		std::filesystem::create_directories(cache_file.parent_path(), error);
-
-		std::ofstream out(cache_file, std::ios::binary | std::ios::trunc);
-		if (!out || !out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size)))
+		if (!utils::write_file(cache_file, std::string_view(static_cast<const char*>(data), size)))
 			return std::unexpected(std::format("could not write '{}'", cache_file.string()));
-		out.close();
 
 		return register_file(cache_file);
 	}

@@ -1,0 +1,8 @@
+name = "Volumetric Clouds"
+version = "1.0.0"
+author = "Revolution"
+description = "Adds the VolumetricClouds instance: raymarched volumetric clouds rendered inside the Studio scene."
+
+[datamodel.context]
+standalone = ["wind.luau"]
+edit = ["wind.luau"]
