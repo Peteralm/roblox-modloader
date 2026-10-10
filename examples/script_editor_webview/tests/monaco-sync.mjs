@@ -11,10 +11,7 @@
 //          --chars <how many characters to type, default 400>   --keep (leave Studio running)
 //          --place <rbxlx/rbxl to open, default a blank place this script writes>
 
-import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { launchStudio, sleep, waitFor } from "./lib/studio-harness.mjs";
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -26,174 +23,30 @@ const studioDir = option("studio");
 const port = Number(option("port", "9223"));
 const charCount = Number(option("chars", "400"));
 const keepStudio = args.includes("--keep");
-let place = option("place");
 
 if (!studioDir) {
 	console.error("usage: node tests/monaco-sync.mjs --studio <studio directory> [--port 9223] [--chars 400]");
 	process.exit(2);
 }
 
-const executable = join(studioDir, "RobloxStudioBeta.exe");
-const logDirectory = join(studioDir, "RobloxModLoader", "logs");
-
-if (!existsSync(executable)) {
-	console.error(`no Studio at '${executable}'`);
-	process.exit(2);
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function logText() {
-	if (!existsSync(logDirectory)) return "";
-
-	return readdirSync(logDirectory)
-		.filter((name) => name.endsWith(".log"))
-		.map((name) => readFileSync(join(logDirectory, name), "utf8"))
-		.join("\n");
-}
-
-async function waitFor(what, predicate, timeoutMs) {
-	const deadline = Date.now() + timeoutMs;
-
-	while (Date.now() < deadline) {
-		const found = await predicate();
-		if (found) return found;
-
-		await sleep(500);
-	}
-
-	throw new Error(`timed out waiting for ${what} after ${timeoutMs / 1000}s`);
-}
-
-// Studio can hold more than one overlay page at a time — the scratch document and whatever the
-// session attached to earlier — and only the one Monaco finished loading in answers __rmlVerify.
-// Picking the first match instead of the ready one fails a healthy build.
-async function findReadyEditorPage() {
-	let targets;
-	try {
-		const response = await fetch(`http://127.0.0.1:${port}/json/list`);
-		targets = await response.json();
-	} catch {
-		return undefined;
-	}
-
-	for (const target of targets.filter((candidate) => candidate.url.includes("rml.scripteditor"))) {
-		const page = await connect(target.webSocketDebuggerUrl);
-		try {
-			if (await page.evaluate("typeof window.__rmlVerify === 'function'")) return page;
-		} catch {
-			// A page that is still navigating rejects the evaluate; try the next one.
-		}
-
-		page.close();
-	}
-
-	return undefined;
-}
-
-/** Minimal CDP client: one socket, Runtime.evaluate, nothing else. */
-async function connect(webSocketUrl) {
-	const socket = new WebSocket(webSocketUrl);
-	const pending = new Map();
-	let nextId = 1;
-
-	socket.addEventListener("message", (event) => {
-		const message = JSON.parse(event.data);
-		const settle = pending.get(message.id);
-		if (!settle) return;
-
-		pending.delete(message.id);
-		settle(message);
-	});
-
-	await new Promise((resolve, reject) => {
-		socket.addEventListener("open", resolve, { once: true });
-		socket.addEventListener("error", reject, { once: true });
-	});
-
-	return {
-		async evaluate(expression) {
-			const id = nextId++;
-			const answer = new Promise((resolve) => pending.set(id, resolve));
-
-			socket.send(JSON.stringify({
-				id,
-				method: "Runtime.evaluate",
-				params: { expression, returnByValue: true, awaitPromise: true },
-			}));
-
-			const message = await answer;
-			if (message.error) throw new Error(message.error.message);
-			if (message.result?.exceptionDetails) throw new Error(message.result.exceptionDetails.text);
-
-			return message.result.result.value;
-		},
-		close() {
-			socket.close();
-		},
-	};
-}
-
-async function isPortAnswering() {
-	try {
-		await fetch(`http://127.0.0.1:${port}/json/version`);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 let studio;
 
 async function run() {
-	// WebView2 takes the debugging port from the environment of the Studio that owns it: if another
-	// Studio already holds this port, every page we would see belongs to that one instead.
-	if (await isPortAnswering()) {
-		throw new Error(`something is already serving CDP on port ${port}; close that Studio or pass --port`);
-	}
+	studio = await launchStudio({ studioDir, port, place: option("place") });
 
-	// The log is append-only and a Studio started earlier may still own the file, so the run reads
-	// only what is written after this point instead of clearing it.
-	const baseline = logText().length;
-	const runLog = () => logText().slice(baseline);
-
-	if (!place) {
-		// Studio started with no place shows the start page and never loads an Edit data model, so
-		// the mod would have nothing to attach to. The smallest place Studio accepts is this one
-		// line of XML; it opens with the default services and nothing else.
-		place = join(mkdtempSync(join(tmpdir(), "rml-monaco-")), "blank.rbxlx");
-		writeFileSync(place, '<roblox version="4"></roblox>\n');
-	}
-
-	studio = spawn(executable, ["-task", "EditFile", "-localPlaceFile", place], {
-		cwd: studioDir,
-		detached: false,
-		stdio: "ignore",
-		env: {
-			...process.env,
-			RML_MONACO_SELFTEST: "1",
-			WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
-		},
-	});
-
-	console.log(`studio ${studio.pid} starting`);
-
-	await waitFor("the engine agent", () => runLog().includes("engine agent running"), 180_000);
+	await waitFor("the engine agent", () => studio.runLog().includes("engine agent running"), 180_000);
 	console.log("engine agent running");
 
-	await waitFor("the overlay to attach", () => runLog().includes("attached editor overlay"), 120_000);
+	await waitFor("the overlay to attach", () => studio.runLog().includes("attached editor overlay"), 120_000);
 	console.log("overlay attached");
 
-	const page = await waitFor("Monaco to load in an overlay page", findReadyEditorPage, 120_000);
+	// Studio can hold more than one overlay page at a time; the one to type into is the plain
+	// scratch script, whose tab is in front, not the worker script the mod opens beside it.
+	const page = await studio.pageFor("the scratch script", (text) => text.startsWith("-- rml monaco self test\n"));
 	console.log("monaco ready");
 
 	const body = "local total = 0\nfor index = 1, 10 do\n\ttotal += index * index\nend\nprint(total)\n";
 	const typed = body.repeat(Math.max(1, Math.ceil(charCount / body.length)));
-
-	// The scratch document's first text arrives as a report of its own; typing before it lands would
-	// count it as a rewrite below.
-	await waitFor("the scratch document's text", () =>
-		page.evaluate("window.__rmlModelText().startsWith('-- rml monaco self test')"), 30_000);
 	const remoteBefore = await page.evaluate("window.__rmlRemoteChanges()");
 
 	// One key every 40 ms, like a fast typist: acknowledgements and text reports then land between
@@ -262,8 +115,12 @@ async function run() {
 
 	console.log(`completions: ${suggestions.length} entries, typed from the sourcemap`);
 
-	const errors = runLog().split("\n").filter((line) => line.includes("[error]"));
-	if (errors.length > 0) throw new Error(`the loader logged ${errors.length} error(s):\n${errors.join("\n")}`);
+	// Other mods installed in the same Studio log their own errors; only this mod's fail the check.
+	const errors = studio.errors().filter((line) => /ScriptEditorWebview|luau-lsp|WebView2|engine agent/i.test(line));
+	if (errors.length > 0) throw new Error(`the mod logged ${errors.length} error(s):\n${errors.join("\n")}`);
+
+	const dumps = studio.newCrashDumps();
+	if (dumps.length > 0) throw new Error(`new crash dump(s): ${dumps.join(", ")}`);
 
 	page.close();
 
@@ -277,5 +134,5 @@ try {
 	console.error(`FAIL: ${failure.message}`);
 	process.exitCode = 1;
 } finally {
-	if (studio && !keepStudio) studio.kill();
+	if (studio && !keepStudio) await studio.stop();
 }
