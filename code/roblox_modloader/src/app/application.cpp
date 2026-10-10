@@ -91,14 +91,6 @@ namespace rml
 			RML_WARN("Qt action hook not installed yet (Qt not resolvable); will retry on demand.");
 		}
 
-		// Studio may have finished its menu bar before the loader arrived, and the
-		// build hook only fires once. The pump is what makes the mods menu and
-		// every queued GUI task work in that case.
-		if (qt::QtIntegration::instance()->ensure_gui_pump())
-		{
-			RML_INFO("Qt GUI pump running.");
-		}
-
 		return {};
 	}
 
@@ -106,14 +98,22 @@ namespace rml
 	{
 		g_running = true;
 
+		// Studio builds its menu bar once and the build hook starts the GUI pump from it. Only a
+		// loader that arrived after that moment needs to start the pump itself, and it must wait
+		// to find out: on Studio 0.742 a pump ticking while the main window is still being built
+		// leaves the Ribbon collapsed and deaf to clicks.
+		constexpr auto late_arrival_grace = 20s;
+		const auto started = std::chrono::steady_clock::now();
+
 		while (g_running)
 		{
 			if (const auto qt_integration = qt::QtIntegration::instance())
 			{
 				if (!qt_integration->is_action_hook_ready())
 					qt_integration->ensure_action_hook();
-				if (!qt_integration->is_gui_pump_running())
-					qt_integration->ensure_gui_pump();
+				if (!qt_integration->is_gui_pump_running() && std::chrono::steady_clock::now() - started >= late_arrival_grace
+				    && qt_integration->ensure_gui_pump())
+					RML_WARN("The menu bar hook never fired; started the Qt GUI pump without it.");
 			}
 
 			std::this_thread::sleep_for(1s);
